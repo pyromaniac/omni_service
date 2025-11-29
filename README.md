@@ -1,39 +1,209 @@
-# OmniService
+# OmniService Framework
 
-TODO: Delete this and the text below, and describe your gem
+Composable business operations with railway-oriented programming.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/omni_service`. To experiment with that code, run `bin/console` for an interactive prompt.
+## Quick Start
 
-## Installation
+```ruby
+class Posts::Create
+  extend OmniService::Convenience
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+  option :post_repo, default: -> { PostRepository.new }
 
-Install the gem and add to the application's Gemfile by executing:
+  def self.system
+    @system ||= sequence(
+      input,
+      transaction(create, on_success: [notify])
+    )
+  end
 
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+  def self.input
+    @input ||= parallel(
+      params { required(:title).filled(:string) },
+      FindOne.new(:author, repository: AuthorRepository.new, with: :author_id)
+    )
+  end
+
+  def self.create
+    ->(params, author:, **) { post_repo.create(params.merge(author:)) }
+  end
+end
+
+result = Posts::Create.system.call({ title: 'Hello', author_id: 1 })
+result.success?  # => true
+result.context   # => { author: <Author>, post: <Post> }
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+## Core Concepts
 
-```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+### Components
+Any callable returning `Success(context_hash)` or `Failure(errors)`.
+
+```ruby
+# Lambda
+->(params, **ctx) { Success(post: Post.new(params)) }
+
+# Class with #call
+class ValidateTitle
+  def call(params, **)
+    params[:title].present? ? Success({}) : Failure([{ code: :blank, path: [:title] }])
+  end
+end
 ```
 
-## Usage
+### Result
+Structured output with: `context`, `params`, `errors`, `on_success`, `on_failure`.
 
-TODO: Write usage instructions here
+```ruby
+result.success?  # no errors?
+result.failure?  # has errors?
+result.context   # { post: <Post>, author: <Author> }
+result.errors    # [#<Error code=:blank path=[:title]>]
+result.to_monad  # Success(result) or Failure(result)
+```
 
-## Development
+## Composition
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+### sequence
+Runs components in order. Short-circuits on first failure.
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```ruby
+sequence(
+  validate_params,  # Failure stops here
+  find_author,      # Adds :author to context
+  create_post       # Receives :author
+)
+```
 
-## Contributing
+### parallel
+Runs all components, collects all errors.
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/omni_service.
+```ruby
+parallel(
+  validate_title,  # => Failure([{ path: [:title], code: :blank }])
+  validate_body    # => Failure([{ path: [:body], code: :too_short }])
+)
+# => Result with both errors collected
+```
 
-## License
+### transaction
+Wraps in DB transaction with callbacks.
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+```ruby
+transaction(
+  sequence(validate, create),
+  on_success: [send_email, update_cache],  # After commit
+  on_failure: [log_error]                   # After rollback
+)
+```
+
+### namespace
+Scopes params/context under a key.
+
+```ruby
+# params: { post: { title: 'Hi' }, author: { name: 'John' } }
+parallel(
+  namespace(:post, validate_post),
+  namespace(:author, validate_author)
+)
+# Errors: [:post, :title], [:author, :name]
+```
+
+### collection
+Iterates over arrays.
+
+```ruby
+# params: { comments: [{ body: 'A' }, { body: '' }] }
+collection(validate_comment, namespace: :comments)
+# Errors: [:comments, 1, :body]
+```
+
+### optional
+Swallows failures.
+
+```ruby
+sequence(
+  create_user,
+  optional(fetch_avatar),  # Failure won't stop pipeline
+  send_email
+)
+```
+
+### shortcut
+Early exit on success.
+
+```ruby
+sequence(
+  shortcut(find_existing),  # Found? Exit early
+  create_new                 # Not found? Create
+)
+```
+
+## Entity Lookup
+
+### FindOne
+
+```ruby
+FindOne.new(:post, repository: repo)
+# params: { post_id: 1 } => Success(post: <Post>)
+
+# Options
+FindOne.new(:post, repository: repo, with: :slug)           # Custom param key
+FindOne.new(:post, repository: repo, by: [:author_id, :slug])  # Multi-column
+FindOne.new(:post, repository: repo, nullable: true)        # Allow nil
+FindOne.new(:post, repository: repo, omittable: true)       # Allow missing key
+FindOne.new(:post, repository: repo, skippable: true)       # Skip not found
+
+# Polymorphic
+FindOne.new(:item, repository: { 'Post' => post_repo, 'Article' => article_repo })
+# params: { item_id: 1, item_type: 'Post' }
+```
+
+### FindMany
+
+```ruby
+FindMany.new(:posts, repository: repo)
+# params: { post_ids: [1, 2, 3] } => Success(posts: [...])
+
+# Nested IDs
+FindMany.new(:products, repository: repo, by: { id: [:items, :product_id] })
+# params: { items: [{ product_id: 1 }, { product_id: [2, 3] }] }
+```
+
+## Error Format
+
+```ruby
+Failure(:not_found)
+# => Error(code: :not_found, path: [])
+
+Failure([{ code: :blank, path: [:title] }])
+# => Error(code: :blank, path: [:title])
+
+Failure([{ code: :too_short, path: [:body], tokens: { min: 100 } }])
+# => Error with interpolation tokens for i18n
+```
+
+## Async Execution
+
+```ruby
+class Posts::Create
+  extend OmniService::Convenience
+  extend OmniService::Async::Convenience[queue: 'default']
+
+  def self.system
+    @system ||= sequence(...)
+  end
+end
+
+Posts::Create.system_async.call(params, context)
+# => Success(job_id: 'abc-123')
+```
+
+## Strict Mode
+
+```ruby
+operation.call!(params)  # Raises OmniService::OperationFailed on failure
+
+# Or via convenience
+Posts::Create.system!.call(params)
+```
