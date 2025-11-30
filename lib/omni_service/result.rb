@@ -12,6 +12,7 @@
 # - on_failure: results from transaction failure callbacks
 #
 # Components return Success/Failure monads which are converted to Result:
+# - Success() => Result(context: {})
 # - Success(key: value) => Result(context: { key: value })
 # - Success(params, key: value) => Result(params: [params], context: { key: value })
 # - Failure(:code) => Result(errors: [Error(code: :code)])
@@ -47,6 +48,8 @@ class OmniService::Result
     case result
     in OmniService::Result
       result
+    in Success()
+      OmniService::Result.build(component)
     in Success(params, *other_params, Hash => context) if context.keys.all?(Symbol)
       OmniService::Result.build(component, params: [params, *other_params], context:)
     in Success(Hash => context) if context.keys.all?(Symbol)
