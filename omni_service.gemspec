@@ -31,4 +31,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'dry-monads'
   spec.add_dependency 'dry-struct'
   spec.add_dependency 'dry-types'
+  spec.add_dependency 'dry-validation'
 end
