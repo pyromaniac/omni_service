@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 # Wraps operation execution in a background job (ActiveJob).
-# Returns immediately with Success(job_id: ...) instead of operation result.
+# Returns immediately with Success(job: ...) instead of operation result.
 #
 # @example Direct usage
 #   async = OmniService::Async.new(Posts::Create, :system, job_class: PostJob)
 #   async.call({ title: 'Hello' }, author: user)
-#   # => Success(job_id: 'abc-123')
+#   # => Success(job: #<OperationJob:...>)
 #
 # @example Via Convenience module (recommended)
 #   class Posts::Create
@@ -20,10 +20,14 @@
 #
 #   Posts::Create.system_async.call({ title: 'Hello' }, author: user)
 #
+# @example Scheduling with ActiveJob options
+#   Posts::Create.system_async.set(wait: 5.minutes).call(params)
+#   Posts::Create.system_async.set(wait_until: Date.tomorrow.noon, queue: 'low').call(params)
+#
 class OmniService::Async
   extend Dry::Initializer
-  include Dry::Equalizer(:container_class, :container_method, :job_class, :job_options)
-  include OmniService::Inspect.new(:container_class, :container_method, :job_class, :job_options)
+  include Dry::Equalizer(:operation_class, :operation_method, :job_class, :job_options)
+  include OmniService::Inspect.new(:operation_class, :operation_method, :job_class, :job_options)
   include Dry::Monads[:result]
 
   # A helper module to simplify async operation creation.
@@ -94,13 +98,28 @@ class OmniService::Async
     end
   end
 
-  param :container_class, OmniService::Types::Class
-  param :container_method, OmniService::Types::Symbol
+  param :operation_class, OmniService::Types::Class
+  param :operation_method, OmniService::Types::Symbol
   option :job_class, OmniService::Types::Class, default: proc { OperationJob }
   option :job_options, OmniService::Types::Hash, default: proc { {} }
 
+  # Returns a new Async instance with merged job options.
+  #
+  # @example Schedule job to run in 5 minutes
+  #   Posts::Create.system_async.set(wait: 5.minutes).call(params)
+  #
+  # @example Schedule job at specific time with custom queue
+  #   Posts::Create.system_async.set(wait_until: Date.tomorrow.noon, queue: 'low').call(params)
+  #
+  # @param options [Hash] ActiveJob options (wait:, wait_until:, queue:, priority:, etc.)
+  # @return [OmniService::Async] new instance with merged options
+  #
+  def set(**options)
+    self.class.new(operation_class, operation_method, job_class:, job_options: job_options.merge(options))
+  end
+
   def call(*params, **context)
-    job = job_class.set(job_options).perform_later(container_class, container_method, params, context)
-    Success(job_id: job.provider_job_id)
+    job = job_class.set(job_options).perform_later(operation_class, operation_method, params, context)
+    Success(job:)
   end
 end

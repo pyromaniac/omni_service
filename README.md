@@ -195,8 +195,10 @@ class Posts::Create
   end
 end
 
-Posts::Create.system_async.call(params, context)
-# => Success(job_id: 'abc-123')
+Posts::Create.system_async.call(params, **context)
+# => Success(job: #<OperationJob:...>)
+
+Posts::Create.system_async.set(wait: 5.minutes, queue: 'low').call(params, **context)
 ```
 
 ## Strict Mode
