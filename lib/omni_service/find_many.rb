@@ -64,10 +64,12 @@ class OmniService::FindMany
   end
 
   PolymorphicReference = Class.new(Dry::Struct) do
+    extend Forwardable
+
     attribute :type, Reference
     attribute :id, Reference
 
-    delegate :path, :missing_id_path, to: :id
+    def_delegators :id, :path, :missing_id_path
 
     def undefined?
       type.undefined? || id.undefined?

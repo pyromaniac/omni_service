@@ -30,6 +30,8 @@
 #
 class OmniService::Namespace
   extend Dry::Initializer
+  extend Forwardable
+
   include Dry::Monads[:result]
   include Dry::Equalizer(:namespace, :component, :shared_params)
   include OmniService::Inspect.new(:namespace, :component, :shared_params)
@@ -39,7 +41,7 @@ class OmniService::Namespace
   param :component, OmniService::Types::Interface(:call)
   option :shared_params, OmniService::Types::Bool, default: -> { false }
 
-  delegate :signature, to: :component_wrapper
+  def_delegators :component_wrapper, :signature
 
   def call(*params, **context)
     inner_params = prepare_params(params)

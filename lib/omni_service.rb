@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'forwardable'
+
 require 'dry/core/constants'
 require 'dry/monads'
 require 'dry/monads/do'
