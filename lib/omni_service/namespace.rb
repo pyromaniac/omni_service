@@ -7,6 +7,7 @@
 # - Merges context[namespace] into component context with priority
 # - Wraps returned context under namespace key
 # - Prefixes error paths with namespace
+# - Skips component when optional: true and namespace key is missing from params
 #
 # @example Nested author creation
 #   # params: { title: 'Hello', author: { name: 'John', email: 'j@test.com' } }
@@ -22,6 +23,11 @@
 #   )
 #   # Both receive full params; results namespaced separately
 #
+# @example Optional namespace (skip if key missing)
+#   # params: { title: 'Hello' }  (no :author key)
+#   namespace(:author, create_author, optional: true)
+#   # Component not called, returns Success with unchanged params/context
+#
 # @example Sequential namespace accumulation
 #   sequence(
 #     namespace(:author, validate_author),  # => { author: { validated: true } }
@@ -33,17 +39,20 @@ class OmniService::Namespace
   extend Forwardable
 
   include Dry::Monads[:result]
-  include Dry::Equalizer(:namespace, :component, :shared_params)
-  include OmniService::Inspect.new(:namespace, :component, :shared_params)
+  include Dry::Equalizer(:namespace, :component, :shared_params, :optional)
+  include OmniService::Inspect.new(:namespace, :component, :shared_params, :optional)
   include OmniService::Strict
 
   param :namespace, OmniService::Types::Symbol
   param :component, OmniService::Types::Interface(:call)
   option :shared_params, OmniService::Types::Bool, default: -> { false }
+  option :optional, OmniService::Types::Bool, default: -> { false }
 
   def_delegators :component_wrapper, :signature
 
   def call(*params, **context)
+    return skip_result(params, context) if optional && !namespace_key_present?(params)
+
     inner_params = prepare_params(params)
     inner_context = prepare_context(context)
     inner_result = component_wrapper.call(*inner_params, **inner_context)
@@ -109,5 +118,13 @@ class OmniService::Namespace
     errors.map do |error|
       error.new(path: [namespace, *error.path])
     end
+  end
+
+  def namespace_key_present?(params)
+    params.any? { |param| param.is_a?(Hash) && param.key?(namespace) }
+  end
+
+  def skip_result(params, context)
+    OmniService::Result.build(self, params: params, context: context)
   end
 end
