@@ -3,16 +3,21 @@
 # Scopes component execution under a namespace key.
 #
 # Behavior:
+# - Requires namespace key in params (returns :missing error if absent)
 # - Extracts params from params[namespace] (disable with shared_params: true)
 # - Merges context[namespace] into component context with priority
-# - Wraps returned context under namespace key
+# - Wraps returned params and context under namespace key
 # - Prefixes error paths with namespace
-# - Skips component when optional: true and namespace key is missing from params
+#
+# Options:
+# - optional: true - skips component when namespace key is missing (no error)
+# - shared_params: true - passes full params (no extraction), key not required
 #
 # @example Nested author creation
 #   # params: { title: 'Hello', author: { name: 'John', email: 'j@test.com' } }
 #   namespace(:author, create_author)
 #   # Inner receives: { name: 'John', email: 'j@test.com' }
+#   # Result params: { author: { name: 'John', email: 'j@test.com' } }
 #   # Result context: { author: { author: <Author> } }
 #   # Error paths: [:author, :email] instead of [:email]
 #
@@ -22,6 +27,7 @@
 #     namespace(:search, index_search, shared_params: true)
 #   )
 #   # Both receive full params; results namespaced separately
+#   # Namespace key not required with shared_params: true
 #
 # @example Optional namespace (skip if key missing)
 #   # params: { title: 'Hello' }  (no :author key)
@@ -52,12 +58,13 @@ class OmniService::Namespace
 
   def call(*params, **context)
     return skip_result(params, context) if optional && !namespace_key_present?(params)
+    return missing_key_result(params, context) unless shared_params || namespace_key_present?(params)
 
     inner_params = prepare_params(params)
     inner_context = prepare_context(context)
     inner_result = component_wrapper.call(*inner_params, **inner_context)
 
-    transform_result(inner_result, params:, context:, inner_context_keys: inner_context.keys)
+    transform_result(inner_result, context:, inner_context_keys: inner_context.keys)
   end
 
   private
@@ -66,14 +73,12 @@ class OmniService::Namespace
     @component_wrapper ||= OmniService::Component.wrap(component)
   end
 
-  def transform_result(inner_result, params:, context:, inner_context_keys:)
-    merged_context = build_merged_context(inner_result, context:, inner_context_keys:)
-
-    if inner_result.success?
-      inner_result.merge(params:, context: merged_context)
-    else
-      inner_result.merge(params:, context: merged_context, errors: prefix_errors(inner_result.errors))
-    end
+  def transform_result(inner_result, context:, inner_context_keys:)
+    inner_result.merge(
+      params: inner_result.params.map { |param| { namespace => param } },
+      context: build_merged_context(inner_result, context:, inner_context_keys:),
+      errors: prefix_errors(inner_result.errors)
+    )
   end
 
   def build_merged_context(inner_result, context:, inner_context_keys:)
@@ -126,5 +131,14 @@ class OmniService::Namespace
 
   def skip_result(params, context)
     OmniService::Result.build(self, params: params, context: context)
+  end
+
+  def missing_key_result(params, context)
+    OmniService::Result.build(
+      self,
+      params: params,
+      context: context,
+      errors: [OmniService::Error.build(self, code: :missing, path: [namespace])]
+    )
   end
 end

@@ -3,7 +3,7 @@
 RSpec.describe OmniService::Namespace do
   subject(:namespace_component) { described_class.new(:author, author_component) }
 
-  let(:author_component) { ->(params, **) { Dry::Monads::Success(author: params) } }
+  let(:author_component) { ->(params, **) { Dry::Monads::Success(received: params) } }
 
   describe '#call' do
     context 'when namespace key is present' do
@@ -16,8 +16,8 @@ RSpec.describe OmniService::Namespace do
 
       it 'extracts namespaced params and wraps context' do
         expect(result).to be_success & have_attributes(
-          params: [{ title: 'Hello World', author: { name: 'John', email: 'john@test.com' } }],
-          context: { blog: 'tech', author: { author: { name: 'John', email: 'john@test.com' } } }
+          params: [{ author: { name: 'John', email: 'john@test.com' } }],
+          context: { blog: 'tech', author: { received: { name: 'John', email: 'john@test.com' } } }
         )
       end
     end
@@ -25,10 +25,11 @@ RSpec.describe OmniService::Namespace do
     context 'when namespace key is missing' do
       subject(:result) { namespace_component.call({ title: 'Hello World' }, blog: 'tech') }
 
-      it 'passes through params unchanged' do
-        expect(result).to be_success & have_attributes(
+      it 'returns failure with missing error' do
+        expect(result).to be_failure & have_attributes(
           params: [{ title: 'Hello World' }],
-          context: { blog: 'tech', author: { author: { title: 'Hello World' } } }
+          context: { blog: 'tech' },
+          errors: [have_attributes(code: :missing, path: [:author])]
         )
       end
     end
@@ -119,9 +120,9 @@ RSpec.describe OmniService::Namespace do
           )
         end
 
-        it 'extracts namespace from each param' do
+        it 'extracts namespace from each param and wraps result' do
           expect(result).to be_success & have_attributes(
-            params: [{ title: 'Hello', author: { name: 'John' } }, { metadata: 'extra', author: { bio: 'Writer' } }],
+            params: [{ author: { name: 'John' } }, { author: { bio: 'Writer' } }],
             context: { author: { first: { name: 'John' }, second: { bio: 'Writer' } } }
           )
         end
@@ -130,9 +131,9 @@ RSpec.describe OmniService::Namespace do
       context 'when second param lacks namespace key' do
         subject(:result) { namespace_component.call({ author: { name: 'John' } }, { other_data: 'value' }) }
 
-        it 'leaves param without namespace key unchanged' do
+        it 'wraps all inner params including passed-through ones' do
           expect(result).to be_success & have_attributes(
-            params: [{ author: { name: 'John' } }, { other_data: 'value' }],
+            params: [{ author: { name: 'John' } }, { author: { other_data: 'value' } }],
             context: { author: { first: { name: 'John' }, second: { other_data: 'value' } } }
           )
         end
@@ -155,7 +156,7 @@ RSpec.describe OmniService::Namespace do
 
       it 'accumulates context from multiple namespace calls' do
         expect(result).to be_success & have_attributes(
-          params: [{ title: 'Hello', author: { name: 'John' } }],
+          params: [{ author: { name: 'John' } }],
           context: {
             author: {
               validated: true,
@@ -163,6 +164,72 @@ RSpec.describe OmniService::Namespace do
               author: { name: 'John', role: 'contributor', validated: true }
             }
           }
+        )
+      end
+    end
+
+    context 'with sequential namespaces where first transforms params' do
+      subject(:result) { pipeline.call({ nested: { name: 'John', extra: 'filtered' } }) }
+
+      let(:filter_component) do
+        # Component that returns Result with transformed params (like Params does)
+        Class.new do
+          def call(params, **)
+            filtered = params.slice(:name)
+            OmniService::Result.build(self, params: [filtered], context: filtered)
+          end
+        end.new
+      end
+      let(:receive_component) { ->(params, **) { Dry::Monads::Success(received: params) } }
+      let(:pipeline) do
+        OmniService::Sequence.new(
+          described_class.new(:nested, filter_component),
+          described_class.new(:nested, receive_component)
+        )
+      end
+
+      it 'passes transformed params to second namespace' do
+        expect(result).to be_success & have_attributes(
+          params: [{ nested: { name: 'John' } }],
+          context: { nested: { name: 'John', received: { name: 'John' } } }
+        )
+      end
+    end
+
+    context 'when inner component returns fewer params than received' do
+      subject(:result) { namespace_component.call({ author: { a: 1 } }, { author: { b: 2 } }) }
+
+      let(:author_component) do
+        # Component accepts 2 params but returns only 1
+        Class.new do
+          def call(first, _second, **)
+            OmniService::Result.build(self, params: [first.merge(transformed: true)], context: {})
+          end
+        end.new
+      end
+
+      it 'wraps only what inner returns' do
+        expect(result).to be_success & have_attributes(
+          params: [{ author: { a: 1, transformed: true } }]
+        )
+      end
+    end
+
+    context 'when inner component returns more params than received (parallel inside)' do
+      subject(:result) { namespace_component.call({ author: { x: 1 }, other: 'kept' }) }
+
+      let(:author_component) do
+        # Component returns multiple params (like parallel does)
+        Class.new do
+          def call(_params, **)
+            OmniService::Result.build(self, params: [{ a: 1 }, { b: 2 }, { c: 3 }], context: {})
+          end
+        end.new
+      end
+
+      it 'wraps each inner param with namespace' do
+        expect(result).to be_success & have_attributes(
+          params: [{ author: { a: 1 } }, { author: { b: 2 } }, { author: { c: 3 } }]
         )
       end
     end
@@ -183,7 +250,7 @@ RSpec.describe OmniService::Namespace do
 
         it 'properly nests params extraction and context wrapping' do
           expect(result).to be_success & have_attributes(
-            params: [{ title: 'Hello', author: { name: 'John', address: { city: 'NYC', zip: '10001' } } }],
+            params: [{ author: { address: { city: 'NYC', zip: '10001' } } }],
             context: { author: { address: { address: { city: 'NYC', zip: '10001' } } } }
           )
         end
@@ -211,33 +278,33 @@ RSpec.describe OmniService::Namespace do
     context 'when successful' do
       subject(:result) { namespace_component.call({ title: 'Hello', author: { name: 'John' } }, blog: 'tech') }
 
-      it 'passes full params and wraps context under namespace' do
+      it 'passes full params and wraps result under namespace' do
         expect(result).to be_success & have_attributes(
-          params: [{ title: 'Hello', author: { name: 'John' } }],
-          context: { blog: 'tech', author: { author: { title: 'Hello', author: { name: 'John' } } } }
+          params: [{ author: { title: 'Hello', author: { name: 'John' } } }],
+          context: { blog: 'tech', author: { received: { title: 'Hello', author: { name: 'John' } } } }
         )
       end
     end
 
     context 'without namespace key in params' do
-      subject(:result) { namespace_component.call({ data: 'test' }) }
+      subject(:result) { namespace_component.call({ some: 'test' }) }
 
-      it 'still wraps context under namespace key' do
+      it 'still wraps result under namespace key' do
         expect(result).to be_success & have_attributes(
-          params: [{ data: 'test' }],
-          context: { author: { author: { data: 'test' } } }
+          params: [{ author: { some: 'test' } }],
+          context: { author: { received: { some: 'test' } } }
         )
       end
     end
 
     context 'with failing inner component' do
-      subject(:result) { namespace_component.call({ data: 'test' }) }
+      subject(:result) { namespace_component.call({ some: 'test' }) }
 
       let(:author_component) { ->(_params, **) { Dry::Monads::Failure([{ code: :invalid, path: [:name] }]) } }
 
       it 'prefixes error paths with namespace' do
         expect(result).to be_failure & have_attributes(
-          params: [{ data: 'test' }],
+          params: [{ author: { some: 'test' } }],
           context: {},
           errors: [have_attributes(code: :invalid, path: %i[author name])]
         )
@@ -256,12 +323,12 @@ RSpec.describe OmniService::Namespace do
         )
       end
 
-      it 'both namespaces receive same params' do
+      it 'each namespace wraps its result, sequence sees first namespace params' do
         expect(result).to be_success & have_attributes(
-          params: [{ address: '123 Main St' }],
+          params: [{ in_stock: { preorder: { address: '123 Main St' } } }],
           context: {
             preorder: { order: { type: :preorder, address: '123 Main St' } },
-            in_stock: { order: { type: :in_stock, address: '123 Main St' } }
+            in_stock: { order: { type: :in_stock, preorder: { address: '123 Main St' } } }
           }
         )
       end
@@ -274,10 +341,10 @@ RSpec.describe OmniService::Namespace do
     context 'when namespace key is present' do
       subject(:result) { namespace_component.call({ title: 'Hello', author: { name: 'John' } }, blog: 'tech') }
 
-      it 'calls the component and processes normally' do
+      it 'calls the component and wraps result' do
         expect(result).to be_success & have_attributes(
-          params: [{ title: 'Hello', author: { name: 'John' } }],
-          context: { blog: 'tech', author: { author: { name: 'John' } } }
+          params: [{ author: { name: 'John' } }],
+          context: { blog: 'tech', author: { received: { name: 'John' } } }
         )
       end
     end
@@ -323,10 +390,10 @@ RSpec.describe OmniService::Namespace do
       context 'when namespace key is present' do
         subject(:result) { namespace_component.call({ title: 'Hello', author: { name: 'John' } }, blog: 'tech') }
 
-        it 'calls the component with full params' do
+        it 'calls the component with full params and wraps result' do
           expect(result).to be_success & have_attributes(
-            params: [{ title: 'Hello', author: { name: 'John' } }],
-            context: { blog: 'tech', author: { author: { title: 'Hello', author: { name: 'John' } } } }
+            params: [{ author: { title: 'Hello', author: { name: 'John' } } }],
+            context: { blog: 'tech', author: { received: { title: 'Hello', author: { name: 'John' } } } }
           )
         end
       end
@@ -338,9 +405,9 @@ RSpec.describe OmniService::Namespace do
       context 'when namespace key is in second param only' do
         subject(:result) { namespace_component.call({ other: 'data' }, { author: { bio: 'Writer' } }) }
 
-        it 'calls the component' do
+        it 'calls the component and wraps all params' do
           expect(result).to be_success & have_attributes(
-            params: [{ other: 'data' }, { author: { bio: 'Writer' } }],
+            params: [{ author: { other: 'data' } }, { author: { bio: 'Writer' } }],
             context: { author: { first: { other: 'data' }, second: { bio: 'Writer' } } }
           )
         end
