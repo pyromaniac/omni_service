@@ -92,12 +92,12 @@ RSpec.describe OmniService::Transaction do
       context 'when the on_success callback raises an exception' do
         let(:on_success) do
           [
-            ->(_params, **_context) { test_simple_repository.create(name: 'on_success1') },
-            lambda { |_params, **_context|
+            ->(_, **) { test_simple_repository.create(name: 'on_success1') },
+            lambda { |_, **|
               test_simple_repository.create(name: 'on_success2')
               raise 'on_success failed'
             },
-            ->(_params, **_context) { test_simple_repository.create(name: 'on_success3') }
+            ->(_, **) { test_simple_repository.create(name: 'on_success3') }
           ]
         end
 
@@ -296,6 +296,61 @@ RSpec.describe OmniService::Transaction do
           expect(result.on_success).to eq([])
           expect(result.on_failure).to match([an_instance_of(OmniService::Result)])
         end
+      end
+    end
+  end
+
+  describe '#signature' do
+    subject(:signature) { transaction.signature }
+
+    let(:on_success) { [] }
+    let(:on_failure) { [] }
+
+    context 'when component has context-only signature' do
+      let(:component) { ->(**) {} }
+
+      it 'returns zero params' do
+        expect(signature).to eq([0, true])
+      end
+    end
+
+    context 'when component has single param' do
+      let(:component) { ->(param, **) {} }
+
+      it 'returns param count' do
+        expect(signature).to eq([1, true])
+      end
+    end
+
+    context 'when component has multiple params without context' do
+      let(:component) { ->(first, second) {} }
+
+      it 'returns param count with context forced true' do
+        expect(signature).to eq([2, true])
+      end
+    end
+
+    context 'when component has optional params' do
+      let(:component) { ->(first, second = nil, **) {} }
+
+      it 'returns total param count including optional' do
+        expect(signature).to eq([2, true])
+      end
+    end
+
+    context 'when component has splat signature' do
+      let(:component) { ->(*params, **) {} }
+
+      it 'returns nil for params count' do
+        expect(signature).to eq([nil, true])
+      end
+    end
+
+    context 'when component has required param and splat' do
+      let(:component) { ->(first, *rest, **) {} }
+
+      it 'returns nil for params count' do
+        expect(signature).to eq([nil, true])
       end
     end
   end

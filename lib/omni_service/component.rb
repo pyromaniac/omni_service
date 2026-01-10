@@ -61,7 +61,7 @@ class OmniService::Component
 
   def signature
     @signature ||= [
-      call_args(%i[rest]).empty? ? call_args(%i[req opt]).size : call_args(%i[rest]).size,
+      call_args(%i[rest]).empty? ? call_args(%i[req opt]).size : nil,
       !call_args(%i[key keyreq keyrest]).empty?
     ]
   end

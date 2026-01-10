@@ -24,7 +24,7 @@ class OmniService::Sequence
   include OmniService::Inspect.new(:components)
   include OmniService::Strict
 
-  param :components, OmniService::Types::Array.of(OmniService::Types::Interface(:call))
+  param :components, OmniService::Types::Array.of(OmniService::Types::Interface(:call)).constrained(min_size: 1)
 
   def initialize(*args, **)
     super(args.flatten(1), **)
@@ -39,10 +39,7 @@ class OmniService::Sequence
   end
 
   def signature
-    @signature ||= begin
-      param_counts = component_wrappers.map { |component| component.signature.first }
-      [param_counts.all? ? param_counts.max : nil, true]
-    end
+    @signature ||= [component_wrappers.first.signature.first, true]
   end
 
   private

@@ -24,6 +24,6 @@ class OmniService::Context
   end
 
   def signature
-    [-1, true]
+    [0, true]
   end
 end

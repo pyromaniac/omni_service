@@ -42,8 +42,6 @@
 #
 class OmniService::Namespace
   extend Dry::Initializer
-  extend Forwardable
-
   include Dry::Monads[:result]
   include Dry::Equalizer(:namespace, :component, :shared_params, :optional)
   include OmniService::Inspect.new(:namespace, :component, :shared_params, :optional)
@@ -54,8 +52,6 @@ class OmniService::Namespace
   option :shared_params, OmniService::Types::Bool, default: -> { false }
   option :optional, OmniService::Types::Bool, default: -> { false }
 
-  def_delegators :component_wrapper, :signature
-
   def call(*params, **context)
     return skip_result(params, context) if optional && !namespace_key_present?(params)
     return missing_key_result(params, context) unless shared_params || namespace_key_present?(params)
@@ -65,6 +61,10 @@ class OmniService::Namespace
     inner_result = component_wrapper.call(*inner_params, **inner_context)
 
     transform_result(inner_result, context:, inner_context_keys: inner_context.keys)
+  end
+
+  def signature
+    @signature ||= [shared_params ? component_wrapper.signature.first : 1, true]
   end
 
   private
@@ -94,7 +94,7 @@ class OmniService::Namespace
   def prepare_params(params)
     return params if shared_params || params.empty?
 
-    params_count = component_wrapper.signature[0]
+    params_count = component_wrapper.signature[0] || params.size
     return params if params_count.zero?
 
     params.each_with_index.map { |param, index| extract_namespaced_param(param, index, params_count) }

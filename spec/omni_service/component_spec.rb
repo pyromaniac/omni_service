@@ -71,4 +71,56 @@ RSpec.describe OmniService::Component do
       end
     end
   end
+
+  describe '#signature' do
+    subject(:signature) { component.signature }
+
+    context 'with context-only callable' do
+      let(:callable) { ->(**) {} }
+
+      it 'returns zero params with context' do
+        expect(signature).to eq([0, true])
+      end
+    end
+
+    context 'with single param callable' do
+      let(:callable) { ->(param, **) {} }
+
+      it 'returns param count with context' do
+        expect(signature).to eq([1, true])
+      end
+    end
+
+    context 'with multiple params callable' do
+      let(:callable) { ->(first, second) {} }
+
+      it 'returns param count without context' do
+        expect(signature).to eq([2, false])
+      end
+    end
+
+    context 'with optional params callable' do
+      let(:callable) { ->(first, second = nil, **) {} }
+
+      it 'returns total param count including optional' do
+        expect(signature).to eq([2, true])
+      end
+    end
+
+    context 'with splat params callable' do
+      let(:callable) { ->(*params, **) {} }
+
+      it 'returns nil for params count' do
+        expect(signature).to eq([nil, true])
+      end
+    end
+
+    context 'with required param and splat callable' do
+      let(:callable) { ->(first, *rest, **) {} }
+
+      it 'returns nil for params count' do
+        expect(signature).to eq([nil, true])
+      end
+    end
+  end
 end

@@ -62,6 +62,81 @@ result.errors    # [#<Error code=:blank path=[:title]>]
 result.to_monad  # Success(result) or Failure(result)
 ```
 
+### Signature and Params Flow
+
+Each component has a **signature** `[param_count, has_context]` that determines how many positional params it consumes:
+- `param_count`: `nil` (all params) or `>= 0` (specific count)
+- `has_context`: whether it accepts `**context`
+
+**Replacement semantics**: When components are composed, consumed params are replaced by produced params. Unconsumed params are preserved.
+
+```ruby
+# Component signatures:
+# validate_params: [1, true]  - consumes 1 param
+# enrich_data:     [1, true]  - consumes 1 param
+# finalize:        [nil, true] - consumes all params
+
+sequence(validate_params, enrich_data, finalize)
+# Input: [p1, p2, p3]
+
+# validate_params consumes [p1], produces [x]
+# => [x, p2, p3]
+
+# enrich_data consumes [x], produces [y, z] (fan-out)
+# => [y, z, p2, p3]
+
+# finalize consumes all [y, z, p2, p3], produces [result]
+# => [result]
+```
+
+If a component produces nothing (empty params), consumed params are kept in place:
+
+```ruby
+# context_validator has signature [0, true] - consumes 0 params
+sequence(context_validator, process_data)
+# Input: [p1, p2]
+
+# context_validator consumes [], produces []
+# => [p1, p2]  (unchanged)
+
+# process_data receives [p1, p2]
+```
+
+For `parallel`, each component gets a disjoint slice based on its signature. With a single input
+param, components with signature 1 receive the same param (fan-out); signature 0 receives none.
+Components requiring more than one param (or nil) raise.
+
+```ruby
+# A: [1, true], B: [2, true]
+parallel(A, B)
+# Input: [p1, p2, p3, p4]
+
+# A consumes [p1], produces [x]
+# B consumes [p2, p3], produces [y]
+# => [x, y, p4]  (replacements + unconsumed)
+```
+
+With a single input param:
+
+```ruby
+# A: [1, true], B: [1, true]
+parallel(A, B)
+# Input: [p1]
+
+# A consumes [p1], produces [x]
+# B consumes [p1], produces [y]
+# => [x, y]
+```
+
+When `pack_params: true`, params are merged per index:
+
+```ruby
+# A returns [{ a: 1 }, { a: 2 }]
+# B returns [{ b: 1 }]
+parallel(A, B, pack_params: true)
+# => [{ a: 1, b: 1 }, { a: 2 }]
+```
+
 ## Composition
 
 ### sequence

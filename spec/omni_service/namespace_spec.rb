@@ -50,7 +50,7 @@ RSpec.describe OmniService::Namespace do
     context 'when inner returns empty context' do
       subject(:result) { namespace_component.call({ author: {} }, blog: 'tech') }
 
-      let(:author_component) { ->(_params, **) { Dry::Monads::Success({}) } }
+      let(:author_component) { ->(_, **) { Dry::Monads::Success({}) } }
 
       it 'does not add namespace to context' do
         expect(result).to be_success & have_attributes(
@@ -61,7 +61,7 @@ RSpec.describe OmniService::Namespace do
     end
 
     context 'with failing inner component' do
-      let(:author_component) { ->(_params, **) { Dry::Monads::Failure([{ code: :invalid, path: [:email] }]) } }
+      let(:author_component) { ->(_, **) { Dry::Monads::Failure([{ code: :invalid, path: [:email] }]) } }
 
       context 'with single error' do
         subject(:result) { namespace_component.call({ author: { email: '' } }, blog: 'tech') }
@@ -78,7 +78,7 @@ RSpec.describe OmniService::Namespace do
       context 'with empty error path' do
         subject(:result) { namespace_component.call({ author: {} }) }
 
-        let(:author_component) { ->(_params, **) { Dry::Monads::Failure([{ code: :not_found, path: [] }]) } }
+        let(:author_component) { ->(_, **) { Dry::Monads::Failure([{ code: :not_found, path: [] }]) } }
 
         it 'prefixes with namespace only' do
           expect(result).to be_failure & have_attributes(
@@ -93,7 +93,7 @@ RSpec.describe OmniService::Namespace do
         subject(:result) { namespace_component.call({ author: {} }) }
 
         let(:author_component) do
-          ->(_params, **) { Dry::Monads::Failure([{ code: :blank, path: [:name] }, { code: :invalid_format, path: [:email] }]) }
+          ->(_, **) { Dry::Monads::Failure([{ code: :blank, path: [:name] }, { code: :invalid_format, path: [:email] }]) }
         end
 
         it 'prefixes all error paths' do
@@ -143,7 +143,7 @@ RSpec.describe OmniService::Namespace do
     context 'with sequential namespaces on same key' do
       subject(:result) { pipeline.call({ title: 'Hello', author: { name: 'John' } }) }
 
-      let(:validate_component) { ->(_params, **) { Dry::Monads::Success(validated: true, role: 'contributor') } }
+      let(:validate_component) { ->(_, **) { Dry::Monads::Success(validated: true, role: 'contributor') } }
       let(:create_component) do
         ->(params, validated:, role:, **) { Dry::Monads::Success(author: { **params, role: role, validated: validated }) }
       end
@@ -221,7 +221,7 @@ RSpec.describe OmniService::Namespace do
       let(:author_component) do
         # Component returns multiple params (like parallel does)
         Class.new do
-          def call(_params, **)
+          def call(_, **)
             OmniService::Result.build(self, params: [{ a: 1 }, { b: 2 }, { c: 3 }], context: {})
           end
         end.new
@@ -259,7 +259,7 @@ RSpec.describe OmniService::Namespace do
       context 'with failing inner component' do
         subject(:result) { namespace_component.call({ author: { address: {} } }) }
 
-        let(:address_component) { ->(_params, **) { Dry::Monads::Failure([{ code: :invalid, path: [:zip] }]) } }
+        let(:address_component) { ->(_, **) { Dry::Monads::Failure([{ code: :invalid, path: [:zip] }]) } }
 
         it 'properly nests error paths' do
           expect(result).to be_failure & have_attributes(
@@ -300,7 +300,7 @@ RSpec.describe OmniService::Namespace do
     context 'with failing inner component' do
       subject(:result) { namespace_component.call({ some: 'test' }) }
 
-      let(:author_component) { ->(_params, **) { Dry::Monads::Failure([{ code: :invalid, path: [:name] }]) } }
+      let(:author_component) { ->(_, **) { Dry::Monads::Failure([{ code: :invalid, path: [:name] }]) } }
 
       it 'prefixes error paths with namespace' do
         expect(result).to be_failure & have_attributes(
@@ -426,7 +426,7 @@ RSpec.describe OmniService::Namespace do
     end
 
     context 'with failing inner component' do
-      let(:author_component) { ->(_params, **) { Dry::Monads::Failure([{ code: :invalid, path: [:email] }]) } }
+      let(:author_component) { ->(_, **) { Dry::Monads::Failure([{ code: :invalid, path: [:email] }]) } }
 
       context 'when namespace key is present' do
         subject(:result) { namespace_component.call({ author: { email: '' } }, blog: 'tech') }
@@ -455,7 +455,7 @@ RSpec.describe OmniService::Namespace do
     context 'with sequence containing non-optional namespace' do
       subject(:result) { pipeline.call({ author: { name: 'John' } }) }
 
-      let(:validate_component) { ->(_params, **) { Dry::Monads::Success(validated: true) } }
+      let(:validate_component) { ->(_, **) { Dry::Monads::Success(validated: true) } }
       let(:pipeline) do
         OmniService::Sequence.new(
           described_class.new(:author, validate_component),
@@ -475,19 +475,65 @@ RSpec.describe OmniService::Namespace do
   describe '#signature' do
     subject(:signature) { namespace_component.signature }
 
-    context 'with context-accepting component' do
-      let(:author_component) { ->(_params, **) { Dry::Monads::Success({}) } }
-
-      it 'delegates to inner component' do
-        expect(signature).to eq([1, true])
+    context 'with shared_params: false (default)' do
+      it 'always returns 1 regardless of inner component' do
+        expect(described_class.new(:author, ->(**) {}).signature).to eq([1, true])
+        expect(described_class.new(:author, ->(first, **) {}).signature).to eq([1, true])
+        expect(described_class.new(:author, ->(first, second, **) {}).signature).to eq([1, true])
+        expect(described_class.new(:author, ->(first, second = nil, **) {}).signature).to eq([1, true])
+        expect(described_class.new(:author, ->(*params, **) {}).signature).to eq([1, true])
       end
     end
 
-    context 'with context-less component' do
-      let(:author_component) { ->(params) { Dry::Monads::Success(author: params) } }
+    context 'with shared_params: true' do
+      subject(:namespace_component) { described_class.new(:author, author_component, shared_params: true) }
 
-      it 'handles components without context' do
-        expect(signature).to eq([1, false])
+      context 'when component has context-only signature' do
+        let(:author_component) { ->(**) {} }
+
+        it 'returns zero params' do
+          expect(signature).to eq([0, true])
+        end
+      end
+
+      context 'when component has single param' do
+        let(:author_component) { ->(param, **) {} }
+
+        it 'returns param count' do
+          expect(signature).to eq([1, true])
+        end
+      end
+
+      context 'when component has multiple params without context' do
+        let(:author_component) { ->(first, second) {} }
+
+        it 'returns param count with context forced true' do
+          expect(signature).to eq([2, true])
+        end
+      end
+
+      context 'when component has optional params' do
+        let(:author_component) { ->(first, second = nil, **) {} }
+
+        it 'returns total param count including optional' do
+          expect(signature).to eq([2, true])
+        end
+      end
+
+      context 'when component has splat signature' do
+        let(:author_component) { ->(*params, **) {} }
+
+        it 'returns nil for params count' do
+          expect(signature).to eq([nil, true])
+        end
+      end
+
+      context 'when component has required param and splat' do
+        let(:author_component) { ->(first, *rest, **) {} }
+
+        it 'returns nil for params count' do
+          expect(signature).to eq([nil, true])
+        end
       end
     end
   end

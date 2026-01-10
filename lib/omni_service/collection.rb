@@ -30,12 +30,12 @@ class OmniService::Collection
   option :namespace, OmniService::Types::Symbol
 
   def call(*params, **context)
-    params_array = params.map { |param| param.symbolize_keys.fetch(namespace, []) }
-    context_array = context.fetch(namespace, [])
-    size = [*params_array.map(&:size), context_array.size].max
+    params_collection = params.map { |param| param.symbolize_keys.fetch(namespace, default_collection(context)) }
+    context_collection = context.fetch(namespace, default_collection(context))
+    keys = extract_keys(params_collection, context_collection)
 
-    results = (0...size).map do |index|
-      call_wrapper(params_array, context_array, context, index)
+    results = keys.to_h do |key|
+      [key, call_wrapper(params_collection, context_collection, context, key)]
     end
 
     compose_result(results, context)
@@ -47,28 +47,49 @@ class OmniService::Collection
 
   private
 
-  def call_wrapper(params_array, context_array, context, index)
+  def default_collection(context)
+    context.fetch(namespace, []).is_a?(Hash) ? {} : []
+  end
+
+  def extract_keys(params_collection, context_collection)
+    all_collections = [*params_collection, context_collection]
+    if all_collections.any?(Hash)
+      all_collections.select { |c| c.is_a?(Hash) }.flat_map(&:keys).uniq
+    else
+      (0...all_collections.map(&:size).max).to_a
+    end
+  end
+
+  def call_wrapper(params_collection, context_collection, context, key)
     component_wrapper.call(
-      *params_array.pluck(index),
+      *params_collection.map { |c| c[key] },
       **context.except(namespace),
-      **(context_array[index] || {})
+      **(context_collection[key] || {})
     )
   end
 
   def compose_result(results, context)
     OmniService::Result.build(
       self,
-      params: results.map(&:params).transpose.map { |param| { namespace => param } },
-      context: context.merge(namespace => results.map(&:context)),
+      params: compose_params(results),
+      context: context.merge(namespace => wrap_collection(results.keys, results.values.map(&:context))),
       errors: compose_errors(results),
-      on_success: results.flat_map(&:on_success),
-      on_failure: results.flat_map(&:on_failure)
+      on_success: results.values.flat_map(&:on_success),
+      on_failure: results.values.flat_map(&:on_failure)
     )
   end
 
+  def compose_params(results)
+    results.values.map(&:params).transpose.map { |values| { namespace => wrap_collection(results.keys, values) } }
+  end
+
+  def wrap_collection(keys, values)
+    keys.first.is_a?(Integer) ? values : keys.zip(values).to_h
+  end
+
   def compose_errors(results)
-    results.flat_map.with_index do |result, index|
-      result.errors.map { |error| error.new(path: [namespace, index, *error.path]) }
+    results.flat_map do |key, result|
+      result.errors.map { |error| error.new(path: [namespace, key, *error.path]) }
     end
   end
 

@@ -18,8 +18,8 @@ RSpec.describe OmniService::Context do
   end
 
   describe '#signature' do
-    it 'returns splat params and context flag' do
-      expect(component.signature).to eq([-1, true])
+    it 'returns zero params and context flag' do
+      expect(component.signature).to eq([0, true])
     end
   end
 end
