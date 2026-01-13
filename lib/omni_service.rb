@@ -45,6 +45,17 @@ module OmniService
 
   Types = Dry.Types()
 
+  # Exception raised by call! when operation fails.
+  # Contains the full operation result for inspection.
+  class OperationFailed < StandardError
+    attr_reader :operation_result
+
+    def initialize(operation_result)
+      @operation_result = operation_result
+      super(operation_result.errors.inspect)
+    end
+  end
+
   class << self
     def sync_callbacks?
       !!Thread.current[:omni_service_sync_callbacks]
@@ -71,6 +82,7 @@ require_relative 'omni_service/context'
 require_relative 'omni_service/params'
 require_relative 'omni_service/sequence'
 require_relative 'omni_service/parallel'
+require_relative 'omni_service/either'
 require_relative 'omni_service/collection'
 require_relative 'omni_service/optional'
 require_relative 'omni_service/find_one'

@@ -38,6 +38,7 @@ result.context   # => { author: <Author>, post: <Post> }
 
 ### Components
 Any callable returning `Success(context_hash)` or `Failure(errors)`.
+Include `Dry::Monads[:result]` (via `OmniService::Convenience`) or use `Dry::Monads::Success/Failure` explicitly.
 
 ```ruby
 # Lambda
@@ -104,7 +105,7 @@ sequence(context_validator, process_data)
 
 For `parallel`, each component gets a disjoint slice based on its signature. With a single input
 param, components with signature 1 receive the same param (fan-out); signature 0 receives none.
-Components requiring more than one param (or nil) raise.
+Components requiring more than one param receive whatever is available and may raise on strict arity.
 
 ```ruby
 # A: [1, true], B: [2, true]
@@ -184,6 +185,17 @@ parallel(
 # Errors: [:post, :title], [:author, :name]
 ```
 
+### context
+Validates caller-provided context using Dry::Types. Invalid context returns a failure Result by
+default; use `context!` to raise.
+
+```ruby
+sequence(
+  context(current_user: Types::Instance(User), request_id: Types::String),
+  create_post
+)
+```
+
 ### collection
 Iterates over arrays.
 
@@ -211,6 +223,28 @@ Early exit on success.
 sequence(
   shortcut(find_existing),  # Found? Exit early
   create_new                 # Not found? Create
+)
+```
+
+### either
+Tries components in order, returns first success.
+
+```ruby
+either(
+  cache_lookup,      # Try cache first
+  database_lookup,   # Fallback to database
+  compute_fresh      # Last resort: compute
+)
+```
+
+With transaction isolation for rollback on failure:
+
+```ruby
+transaction(
+  either(
+    transaction(risky_operation),  # If fails, rolled back
+    safe_fallback                  # Runs clean
+  )
 )
 ```
 

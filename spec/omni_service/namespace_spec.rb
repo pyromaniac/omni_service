@@ -141,27 +141,50 @@ RSpec.describe OmniService::Namespace do
     end
 
     context 'with sequential namespaces on same key' do
-      subject(:result) { pipeline.call({ title: 'Hello', author: { name: 'John' } }) }
+      subject(:result) { pipeline.call({ author: { name: 'John' } }) }
 
-      let(:validate_component) { ->(_, **) { Dry::Monads::Success(validated: true, role: 'contributor') } }
-      let(:create_component) do
-        ->(params, validated:, role:, **) { Dry::Monads::Success(author: { **params, role: role, validated: validated }) }
-      end
+      let(:stage1) { ->(params, **) { Dry::Monads::Success[params.merge(param1: 1), context1: 1] } }
+      let(:stage2) { ->(params, **) { Dry::Monads::Success[params.merge(param2: 2), context2: 2] } }
+      let(:stage3) { ->(params, **) { Dry::Monads::Success[params.merge(param1: 3, param3: 3), context1: 3] } }
       let(:pipeline) do
         OmniService::Sequence.new(
-          described_class.new(:author, validate_component),
-          described_class.new(:author, create_component)
+          described_class.new(:author, stage1),
+          described_class.new(:author, stage2),
+          described_class.new(:author, stage3)
         )
       end
 
-      it 'accumulates context from multiple namespace calls' do
+      it 'deep merges context from multiple namespace calls' do
         expect(result).to be_success & have_attributes(
-          params: [{ author: { name: 'John' } }],
+          params: [{ author: { name: 'John', param1: 3, param2: 2, param3: 3 } }],
+          context: { author: { context1: 3, context2: 2 } }
+        )
+      end
+    end
+
+    context 'with deep namespace path' do
+      subject(:result) { pipeline.call({ user: { profile: { name: 'John' } } }) }
+
+      let(:component1) { ->(params, **) { Dry::Monads::Success[params.merge(param1: 1), context1: 1] } }
+      let(:component2) { ->(params, **) { Dry::Monads::Success[params.merge(param2: 2), context2: 2] } }
+      let(:component3) { ->(params, **) { Dry::Monads::Success[params.merge(param3: 3), context1: 3] } }
+      let(:component4) { ->(params, **) { Dry::Monads::Success[params.merge(param4: 4), context4: 4] } }
+      let(:pipeline) do
+        OmniService::Sequence.new(
+          described_class.new(%i[user profile], component1),
+          described_class.new(:user, component2),
+          described_class.new(:user, described_class.new(:profile, component3)),
+          described_class.new(%i[user profile], component4)
+        )
+      end
+
+      it 'deep merges context and wraps params from all namespace styles' do
+        expect(result).to be_success & have_attributes(
+          params: [{ user: { profile: { name: 'John', param1: 1, param3: 3, param4: 4 } } }],
           context: {
-            author: {
-              validated: true,
-              role: 'contributor',
-              author: { name: 'John', role: 'contributor', validated: true }
+            user: {
+              context2: 2,
+              profile: { context1: 3, context4: 4 }
             }
           }
         )
@@ -272,8 +295,8 @@ RSpec.describe OmniService::Namespace do
     end
   end
 
-  describe 'shared_params: true' do
-    subject(:namespace_component) { described_class.new(:author, author_component, shared_params: true) }
+  describe 'from: []' do
+    subject(:namespace_component) { described_class.new(:author, author_component, from: []) }
 
     context 'when successful' do
       subject(:result) { namespace_component.call({ title: 'Hello', author: { name: 'John' } }, blog: 'tech') }
@@ -318,8 +341,8 @@ RSpec.describe OmniService::Namespace do
       let(:in_stock_component) { ->(params, **) { Dry::Monads::Success(order: { type: :in_stock, **params }) } }
       let(:pipeline) do
         OmniService::Sequence.new(
-          described_class.new(:preorder, preorder_component, shared_params: true),
-          described_class.new(:in_stock, in_stock_component, shared_params: true)
+          described_class.new(:preorder, preorder_component, from: []),
+          described_class.new(:in_stock, in_stock_component, from: [])
         )
       end
 
@@ -371,31 +394,18 @@ RSpec.describe OmniService::Namespace do
       end
     end
 
-    context 'with shared_params: true' do
-      subject(:namespace_component) do
-        described_class.new(:author, author_component, optional: true, shared_params: true)
+    context 'with from: []' do
+      subject(:result) { namespace_component.call({ title: 'Hello' }, blog: 'tech') }
+
+      let(:namespace_component) do
+        described_class.new(:author, author_component, optional: true, from: [])
       end
 
-      context 'when namespace key is missing' do
-        subject(:result) { namespace_component.call({ title: 'Hello' }, blog: 'tech') }
-
-        it 'skips the component' do
-          expect(result).to be_success & have_attributes(
-            params: [{ title: 'Hello' }],
-            context: { blog: 'tech' }
-          )
-        end
-      end
-
-      context 'when namespace key is present' do
-        subject(:result) { namespace_component.call({ title: 'Hello', author: { name: 'John' } }, blog: 'tech') }
-
-        it 'calls the component with full params and wraps result' do
-          expect(result).to be_success & have_attributes(
-            params: [{ author: { title: 'Hello', author: { name: 'John' } } }],
-            context: { blog: 'tech', author: { received: { title: 'Hello', author: { name: 'John' } } } }
-          )
-        end
+      it 'always calls component since no from key to check' do
+        expect(result).to be_success & have_attributes(
+          params: [{ author: { title: 'Hello' } }],
+          context: { blog: 'tech', author: { received: { title: 'Hello' } } }
+        )
       end
     end
 
@@ -485,8 +495,8 @@ RSpec.describe OmniService::Namespace do
       end
     end
 
-    context 'with shared_params: true' do
-      subject(:namespace_component) { described_class.new(:author, author_component, shared_params: true) }
+    context 'with from: []' do
+      subject(:namespace_component) { described_class.new(:author, author_component, from: []) }
 
       context 'when component has context-only signature' do
         let(:author_component) { ->(**) {} }

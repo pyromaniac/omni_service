@@ -21,7 +21,6 @@
 #
 class OmniService::Component
   extend Dry::Initializer
-  include Dry::Monads[:result]
   include Dry::Equalizer(:callable)
   include OmniService::Inspect.new(:callable)
   include OmniService::Strict

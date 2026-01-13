@@ -5,8 +5,6 @@
 #
 # Includes: Dry::Initializer, Dry::Monads[:result], Dry::Monads::Do, Dry::Core::Constants
 #
-# Factory methods: sequence, parallel, transaction, optional, shortcut,
-#                  namespace, collection, context, params, noop
 #
 # Bang methods: Appending ! to any method returns a callable that uses call!
 #               e.g., MyOp.create! returns MyOp.create.method(:call!)
@@ -73,6 +71,10 @@ module OmniService::Convenience
     OmniService::Parallel.new(...)
   end
 
+  def either(...)
+    OmniService::Either.new(...)
+  end
+
   def collection(...)
     OmniService::Collection.new(...)
   end
@@ -97,8 +99,12 @@ module OmniService::Convenience
     OmniService::Params.params(**, &)
   end
 
-  def context(schema)
+  def context!(schema)
     OmniService::Context.new(schema)
+  end
+
+  def context(schema)
+    OmniService::Context.new(schema, raise_on_error: false)
   end
 
   def component(name, from = Object, **options, &block)

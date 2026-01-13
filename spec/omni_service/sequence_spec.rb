@@ -142,8 +142,8 @@ RSpec.describe OmniService::Sequence do
       let(:component_a) { ->(**) {} }
       let(:component_b) { ->(param, **) {} }
 
-      it 'returns first component signature' do
-        expect(signature).to eq([0, true])
+      it 'returns first non-zero signature' do
+        expect(signature).to eq([1, true])
       end
     end
 

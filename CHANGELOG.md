@@ -1,15 +1,25 @@
 ## [Unreleased]
 
+### Breaking
+
+- **Context**: `Context.new` now requires `raise_on_error`, and validators must respond to `#call` and `#try`; `context()` no longer raises on invalid context, use `context!` to raise
+- **Component**: No longer mixes in `Dry::Monads[:result]`; include it explicitly if you rely on `Success`/`Failure` helpers
+- **Namespace**: Replaced `shared_params: true` with `from: []`; new `from:` option specifies extraction path (defaults to namespace)
+
 ### Changed
 
-- **Sequence**: Simplified signature calculation to use first component's signature directly instead of finding max across all components
-- **Parallel**: Signature calculation now always returns sum of component signatures (distribution semantics)
+- **Sequence**: Signature now uses the first component that consumes params (skips leading context-only components)
+- **Parallel**: Signature calculation returns sum of component signatures (distribution semantics)
 - **Parallel**: Refactored params accumulation into separate methods for clarity
-- **Namespace**: Signature now returns `[1, true]` by default, or delegates to component when `shared_params: true`
+- **Namespace**: Signature now returns `[1, true]` by default, or delegates to component when `from: []`
+- **Namespace**: Now accepts array paths for deep nesting (e.g., `namespace([:user, :profile], component)`); single symbols are coerced to arrays
+- **Namespace**: Context merging simplified to use `deep_merge`
 - **Namespace**: Fixed params extraction when inner component has splat signature (`nil`)
 
 ### Added
 
+- **Context**: `context!` convenience for raising on invalid context
+- **Either**: New composition component that tries components in order and returns the first success; useful for fallback/recovery patterns with transaction isolation support
 - **Parallel**: `pack_params: true` option now supports merging multiple params by index position, not just first param
 - **Collection**: Support for hash-based collections in addition to arrays; keys are preserved in output
 

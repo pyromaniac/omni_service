@@ -39,12 +39,31 @@ class OmniService::Sequence
   end
 
   def signature
-    @signature ||= [component_wrappers.first.signature.first, true]
+    @signature ||= begin
+      first_nonzero = first_nonzero_param_count
+      if first_nonzero.nil? && all_zero_param_counts?
+        [0, true]
+      else
+        [first_nonzero, true]
+      end
+    end
   end
 
   private
 
   def component_wrappers
     @component_wrappers ||= OmniService::Component.wrap(components)
+  end
+
+  def param_counts
+    @param_counts ||= component_wrappers.map { |component| component.signature.first }
+  end
+
+  def first_nonzero_param_count
+    param_counts.find { |count| count != 0 }
+  end
+
+  def all_zero_param_counts?
+    param_counts.all? { |count| count&.zero? }
   end
 end
