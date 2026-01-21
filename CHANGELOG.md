@@ -27,6 +27,7 @@
 
 - **Namespace**: Correctly handles components with splat signatures that consume all params
 - **Parallel**: Proper leftover params handling in distribution mode
+- **Context**: Missing optional keys no longer get written into context on success
 
 ## [0.1.0] - 2025-11-27
 

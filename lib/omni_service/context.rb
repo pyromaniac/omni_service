@@ -18,8 +18,8 @@ class OmniService::Context
   option :raise_on_error, OmniService::Types::Bool, default: -> { true }
 
   def call(*params, **context)
-    validated = schema.to_h { |key, type| [key, type.try(context[key])] }
-    failures = validated.select { |_, result| result.failure? }
+    validated = validated_context(context)
+    failures = failures_from(validated)
 
     if failures.any?
       failure_result(params, context, failures)
@@ -33,6 +33,19 @@ class OmniService::Context
   end
 
   private
+
+  def validated_context(context)
+    schema.each_with_object({}) do |(key, type), result|
+      validation_result = type.try(context[key])
+      next if !context.key?(key) && validation_result.success?
+
+      result[key] = validation_result
+    end
+  end
+
+  def failures_from(validated)
+    validated.select { |_, result| result.failure? }
+  end
 
   def failure_result(params, context, failures)
     errors = failures.values.map { |result| OmniService::Error.build(self, message: result.error.message) }

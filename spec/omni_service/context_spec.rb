@@ -22,6 +22,17 @@ RSpec.describe OmniService::Context do
         )
       end
 
+      context 'with optional key missing' do
+        let(:schema) { { value: OmniService::Types::String.optional } }
+        let(:input) { {} }
+
+        it 'does not add missing keys to context' do
+          expect(result).to be_success & have_attributes(
+            context: {}
+          )
+        end
+      end
+
       context 'with extra keys' do
         let(:input) { { value: 'test', extra: 123 } }
 
