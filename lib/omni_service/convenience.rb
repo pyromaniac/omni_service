@@ -71,6 +71,14 @@ module OmniService::Convenience
     OmniService::Parallel.new(...)
   end
 
+  def fanout(...)
+    OmniService::Fanout.new(...)
+  end
+
+  def split(...)
+    OmniService::Split.new(...)
+  end
+
   def either(...)
     OmniService::Either.new(...)
   end

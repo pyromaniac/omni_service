@@ -20,8 +20,10 @@
 
 - **Context**: `context!` convenience for raising on invalid context
 - **Either**: New composition component that tries components in order and returns the first success; useful for fallback/recovery patterns with transaction isolation support
+- **Fanout**: New composition component that fans out shared params to all components and collects all errors
 - **Parallel**: `pack_params: true` option now supports merging multiple params by index position, not just first param
 - **Collection**: Support for hash-based collections in addition to arrays; keys are preserved in output
+- **Split**: New composition component that distributes params and fails fast on first failure or shortcut
 
 ### Fixed
 
