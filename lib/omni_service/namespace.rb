@@ -26,7 +26,7 @@ require 'active_support/core_ext/hash/deep_merge'
 #   # Inner receives: { name: 'John' }
 #
 # @example Full params with namespaced output
-#   parallel(
+#   fanout(
 #     namespace(:cache, warm_cache, from: []),
 #     namespace(:search, index_search, from: [])
 #   )

@@ -17,7 +17,7 @@ require 'concurrent-ruby'
 # Core concepts:
 # - Components: callables returning Success/Failure monads
 # - Results: structured output with context, params, and errors
-# - Composition: sequence, parallel, transaction, namespace, collection
+# - Composition: chain, fanout, split, either, transaction, namespace, collection
 #
 # @example Simple operation
 #   class Posts::Create
@@ -26,7 +26,7 @@ require 'concurrent-ruby'
 #     option :post_repo, default: -> { PostRepository.new }
 #
 #     def self.system
-#       @system ||= sequence(
+#       @system ||= chain(
 #         validate_params,
 #         transaction(create_post, on_success: [notify_subscribers])
 #       )
@@ -80,8 +80,10 @@ require_relative 'omni_service/result'
 require_relative 'omni_service/component'
 require_relative 'omni_service/context'
 require_relative 'omni_service/params'
-require_relative 'omni_service/sequence'
+require_relative 'omni_service/chain'
 require_relative 'omni_service/parallel'
+require_relative 'omni_service/fanout'
+require_relative 'omni_service/split'
 require_relative 'omni_service/either'
 require_relative 'omni_service/collection'
 require_relative 'omni_service/optional'

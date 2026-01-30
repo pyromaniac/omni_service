@@ -4,7 +4,7 @@
 # Context accumulates across components; each receives merged context from previous.
 #
 # @example Blog post creation pipeline
-#   sequence(
+#   chain(
 #     validate_params,           # Failure here stops the pipeline
 #     find_author,               # Adds :author to context
 #     create_post,               # Receives :author, adds :post
@@ -12,13 +12,13 @@
 #   )
 #
 # @example With shortcut for idempotency
-#   sequence(
+#   chain(
 #     shortcut(find_existing_post),  # Success here exits early
 #     validate_params,
 #     create_post
 #   )
 #
-class OmniService::Sequence
+class OmniService::Chain
   extend Dry::Initializer
   include Dry::Equalizer(:components)
   include OmniService::Inspect.new(:components)

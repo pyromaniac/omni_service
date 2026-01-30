@@ -14,7 +14,7 @@
 #     extend OmniService::Async::Convenience[queue: 'default', retry: 3]
 #
 #     def self.system
-#       @system ||= sequence(validate_params, create_post)
+#       @system ||= chain(validate_params, create_post)
 #     end
 #   end
 #
@@ -39,7 +39,7 @@ class OmniService::Async
   #     extend OmniService::Async::Convenience[queue: 'important', retry: 3]
   #
   #     def self.system
-  #       @system ||= sequence(...)
+  #       @system ||= chain(...)
   #     end
   #   end
   #
@@ -52,7 +52,7 @@ class OmniService::Async
   #     extend OmniService::Async::Convenience[job_class: MyCustomJob]
   #
   #     def self.system
-  #       @system ||= sequence(...)
+  #       @system ||= chain(...)
   #     end
   #   end
   #

@@ -9,14 +9,14 @@
 #
 # @example Post creation with notifications
 #   transaction(
-#     sequence(validate_params, create_post),
+#     chain(validate_params, create_post),
 #     on_success: [send_notifications, update_feed],
 #     on_failure: [log_failure, alert_admin]
 #   )
 #
 # @example Nested transactions
 #   transaction(
-#     sequence(
+#     chain(
 #       create_post,
 #       transaction(create_comments, on_success: [notify_commenters])
 #     ),

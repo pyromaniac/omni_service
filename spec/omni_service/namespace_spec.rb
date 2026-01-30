@@ -147,7 +147,7 @@ RSpec.describe OmniService::Namespace do
       let(:stage2) { ->(params, **) { Dry::Monads::Success[params.merge(param2: 2), context2: 2] } }
       let(:stage3) { ->(params, **) { Dry::Monads::Success[params.merge(param1: 3, param3: 3), context1: 3] } }
       let(:pipeline) do
-        OmniService::Sequence.new(
+        OmniService::Chain.new(
           described_class.new(:author, stage1),
           described_class.new(:author, stage2),
           described_class.new(:author, stage3)
@@ -170,7 +170,7 @@ RSpec.describe OmniService::Namespace do
       let(:component3) { ->(params, **) { Dry::Monads::Success[params.merge(param3: 3), context1: 3] } }
       let(:component4) { ->(params, **) { Dry::Monads::Success[params.merge(param4: 4), context4: 4] } }
       let(:pipeline) do
-        OmniService::Sequence.new(
+        OmniService::Chain.new(
           described_class.new(%i[user profile], component1),
           described_class.new(:user, component2),
           described_class.new(:user, described_class.new(:profile, component3)),
@@ -205,7 +205,7 @@ RSpec.describe OmniService::Namespace do
       end
       let(:receive_component) { ->(params, **) { Dry::Monads::Success(received: params) } }
       let(:pipeline) do
-        OmniService::Sequence.new(
+        OmniService::Chain.new(
           described_class.new(:nested, filter_component),
           described_class.new(:nested, receive_component)
         )
@@ -238,11 +238,11 @@ RSpec.describe OmniService::Namespace do
       end
     end
 
-    context 'when inner component returns more params than received (parallel inside)' do
+    context 'when inner component returns more params than received (split inside)' do
       subject(:result) { namespace_component.call({ author: { x: 1 }, other: 'kept' }) }
 
       let(:author_component) do
-        # Component returns multiple params (like parallel does)
+        # Component returns multiple params (like split does)
         Class.new do
           def call(_, **)
             OmniService::Result.build(self, params: [{ a: 1 }, { b: 2 }, { c: 3 }], context: {})
@@ -340,13 +340,13 @@ RSpec.describe OmniService::Namespace do
       let(:preorder_component) { ->(params, **) { Dry::Monads::Success(order: { type: :preorder, **params }) } }
       let(:in_stock_component) { ->(params, **) { Dry::Monads::Success(order: { type: :in_stock, **params }) } }
       let(:pipeline) do
-        OmniService::Sequence.new(
+        OmniService::Chain.new(
           described_class.new(:preorder, preorder_component, from: []),
           described_class.new(:in_stock, in_stock_component, from: [])
         )
       end
 
-      it 'each namespace wraps its result, sequence sees first namespace params' do
+      it 'each namespace wraps its result, chain sees first namespace params' do
         expect(result).to be_success & have_attributes(
           params: [{ in_stock: { preorder: { address: '123 Main St' } } }],
           context: {
@@ -462,12 +462,12 @@ RSpec.describe OmniService::Namespace do
       end
     end
 
-    context 'with sequence containing non-optional namespace' do
+    context 'with chain containing non-optional namespace' do
       subject(:result) { pipeline.call({ author: { name: 'John' } }) }
 
       let(:validate_component) { ->(_, **) { Dry::Monads::Success(validated: true) } }
       let(:pipeline) do
-        OmniService::Sequence.new(
+        OmniService::Chain.new(
           described_class.new(:author, validate_component),
           described_class.new(:metadata, author_component, optional: true)
         )

@@ -16,14 +16,14 @@
 #     option :post_repo, default: -> { PostRepository.new }
 #
 #     def self.system
-#       @system ||= sequence(
+#       @system ||= chain(
 #         input,
 #         transaction(create, on_success: [notify])
 #       )
 #     end
 #
 #     def self.input
-#       @input ||= parallel(
+#       @input ||= fanout(
 #         params { required(:title).filled(:string) },
 #         find_author
 #       )
@@ -63,12 +63,26 @@ module OmniService::Convenience
     ->(_, **) { Dry::Monads::Success({}) }
   end
 
-  def sequence(...)
-    OmniService::Sequence.new(...)
+  def chain(...)
+    OmniService::Chain.new(...)
   end
 
+  # Deprecated, use chain
+  def sequence(...)
+    chain(...)
+  end
+
+  # Deprecated, use fanout and split
   def parallel(...)
     OmniService::Parallel.new(...)
+  end
+
+  def fanout(...)
+    OmniService::Fanout.new(...)
+  end
+
+  def split(...)
+    OmniService::Split.new(...)
   end
 
   def either(...)

@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+# Deprecated composition component retained for compatibility.
+# Prefer fanout for validation or split for failure short-circuiting.
+
 # Executes all components, collecting errors from all instead of short-circuiting.
 # Useful for validation where you want to report all issues at once.
 # Context merges from all components; params can be distributed or packed.
