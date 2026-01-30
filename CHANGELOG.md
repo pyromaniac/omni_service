@@ -3,12 +3,13 @@
 ### Breaking
 
 - **Context**: `Context.new` now requires `raise_on_error`, and validators must respond to `#call` and `#try`; `context()` no longer raises on invalid context, use `context!` to raise
+- **Chain**: Sequence component renamed to `Chain` (use `chain(...)` or `OmniService::Chain`)
 - **Component**: No longer mixes in `Dry::Monads[:result]`; include it explicitly if you rely on `Success`/`Failure` helpers
 - **Namespace**: Replaced `shared_params: true` with `from: []`; new `from:` option specifies extraction path (defaults to namespace)
 
 ### Changed
 
-- **Sequence**: Signature now uses the first component that consumes params (skips leading context-only components)
+- **Chain**: Signature now uses the first component that consumes params (skips leading context-only components)
 - **Parallel**: Signature calculation returns sum of component signatures (distribution semantics)
 - **Parallel**: Refactored params accumulation into separate methods for clarity
 - **Namespace**: Signature now returns `[1, true]` by default, or delegates to component when `from: []`

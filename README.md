@@ -11,14 +11,14 @@ class Posts::Create
   option :post_repo, default: -> { PostRepository.new }
 
   def self.system
-    @system ||= sequence(
+    @system ||= chain(
       input,
       transaction(create, on_success: [notify])
     )
   end
 
   def self.input
-    @input ||= parallel(
+    @input ||= fanout(
       params { required(:title).filled(:string) },
       FindOne.new(:author, repository: AuthorRepository.new, with: :author_id)
     )
@@ -77,7 +77,7 @@ Each component has a **signature** `[param_count, has_context]` that determines 
 # enrich_data:     [1, true]  - consumes 1 param
 # finalize:        [nil, true] - consumes all params
 
-sequence(validate_params, enrich_data, finalize)
+chain(validate_params, enrich_data, finalize)
 # Input: [p1, p2, p3]
 
 # validate_params consumes [p1], produces [x]
@@ -94,7 +94,7 @@ If a component produces nothing (empty params), consumed params are kept in plac
 
 ```ruby
 # context_validator has signature [0, true] - consumes 0 params
-sequence(context_validator, process_data)
+chain(context_validator, process_data)
 # Input: [p1, p2]
 
 # context_validator consumes [], produces []
@@ -103,13 +103,13 @@ sequence(context_validator, process_data)
 # process_data receives [p1, p2]
 ```
 
-For `parallel`, each component gets a disjoint slice based on its signature. With a single input
+For `split`, each component gets a disjoint slice based on its signature. With a single input
 param, components with signature 1 receive the same param (fan-out); signature 0 receives none.
 Components requiring more than one param receive whatever is available and may raise on strict arity.
 
 ```ruby
 # A: [1, true], B: [2, true]
-parallel(A, B)
+split(A, B)
 # Input: [p1, p2, p3, p4]
 
 # A consumes [p1], produces [x]
@@ -121,7 +121,7 @@ With a single input param:
 
 ```ruby
 # A: [1, true], B: [1, true]
-parallel(A, B)
+split(A, B)
 # Input: [p1]
 
 # A consumes [p1], produces [x]
@@ -129,37 +129,39 @@ parallel(A, B)
 # => [x, y]
 ```
 
-When `pack_params: true`, params are merged per index:
-
-```ruby
-# A returns [{ a: 1 }, { a: 2 }]
-# B returns [{ b: 1 }]
-parallel(A, B, pack_params: true)
-# => [{ a: 1, b: 1 }, { a: 2 }]
-```
-
 ## Composition
 
-### sequence
+### chain
 Runs components in order. Short-circuits on first failure.
 
 ```ruby
-sequence(
+chain(
   validate_params,  # Failure stops here
   find_author,      # Adds :author to context
   create_post       # Receives :author
 )
 ```
 
-### parallel
-Runs all components, collects all errors.
+### fanout
+Runs all components with shared input, collects all errors.
 
 ```ruby
-parallel(
+fanout(
   validate_title,  # => Failure([{ path: [:title], code: :blank }])
   validate_body    # => Failure([{ path: [:body], code: :too_short }])
 )
 # => Result with both errors collected
+```
+
+### split
+Distributes params across components, fails fast on first failure.
+
+```ruby
+split(
+  parse_title,
+  parse_body,
+  parse_author
+)
 ```
 
 ### transaction
@@ -167,7 +169,7 @@ Wraps in DB transaction with callbacks.
 
 ```ruby
 transaction(
-  sequence(validate, create),
+  chain(validate, create),
   on_success: [send_email, update_cache],  # After commit
   on_failure: [log_error]                   # After rollback
 )
@@ -178,7 +180,7 @@ Scopes params/context under a key.
 
 ```ruby
 # params: { post: { title: 'Hi' }, author: { name: 'John' } }
-parallel(
+fanout(
   namespace(:post, validate_post),
   namespace(:author, validate_author)
 )
@@ -190,7 +192,7 @@ Validates caller-provided context using Dry::Types. Invalid context returns a fa
 default; use `context!` to raise.
 
 ```ruby
-sequence(
+chain(
   context(current_user: Types::Instance(User), request_id: Types::String),
   create_post
 )
@@ -209,7 +211,7 @@ collection(validate_comment, namespace: :comments)
 Swallows failures.
 
 ```ruby
-sequence(
+chain(
   create_user,
   optional(fetch_avatar),  # Failure won't stop pipeline
   send_email
@@ -220,7 +222,7 @@ sequence(
 Early exit on success.
 
 ```ruby
-sequence(
+chain(
   shortcut(find_existing),  # Found? Exit early
   create_new                 # Not found? Create
 )
@@ -300,7 +302,7 @@ class Posts::Create
   extend OmniService::Async::Convenience[queue: 'default']
 
   def self.system
-    @system ||= sequence(...)
+    @system ||= chain(...)
   end
 end
 

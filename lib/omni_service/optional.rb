@@ -7,14 +7,14 @@
 # On failure: returns Success({}) with empty context, discarding errors.
 #
 # @example Optional profile enrichment
-#   sequence(
+#   chain(
 #     create_user,
 #     optional(fetch_avatar_from_gravatar),  # Failure won't stop pipeline
 #     send_welcome_email
 #   )
 #
 # @example Optional cache warming
-#   sequence(
+#   chain(
 #     update_post,
 #     optional(warm_cache)  # Cache failure is acceptable
 #   )

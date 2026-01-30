@@ -2,18 +2,18 @@
 
 # Enables early pipeline exit on success. Used for idempotency and guard clauses.
 #
-# On success: marks result with shortcut flag, causing Sequence to exit immediately.
+# On success: marks result with shortcut flag, causing Chain and other components to return early.
 # On failure: returns empty success, allowing pipeline to continue.
 #
 # @example Idempotent post creation
-#   sequence(
+#   chain(
 #     shortcut(find_existing_post),  # Found? Exit with existing post
 #     validate_params,                # Not found? Continue creation
 #     create_post
 #   )
 #
 # @example Guard clause
-#   sequence(
+#   chain(
 #     shortcut(check_already_subscribed),  # Already subscribed? Done
 #     validate_subscription,
 #     create_subscription

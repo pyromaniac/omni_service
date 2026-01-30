@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-RSpec.describe OmniService::Sequence do
-  subject(:sequence) { described_class.new(component_a, component_b) }
+RSpec.describe OmniService::Chain do
+  subject(:chain) { described_class.new(component_a, component_b) }
 
   let(:component_a) { ->(param, **) { Dry::Monads::Success(result_a: param) } }
   let(:component_b) { ->(param, **) { Dry::Monads::Success(result_b: param) } }
 
   describe '.new' do
-    context 'when sequence is empty' do
+    context 'when chain is empty' do
       it 'raises constraint error' do
         expect { described_class.new }.to raise_error(Dry::Types::ConstraintError)
       end
@@ -15,7 +15,7 @@ RSpec.describe OmniService::Sequence do
   end
 
   describe '#call' do
-    subject(:call) { sequence.call(*input_params) }
+    subject(:call) { chain.call(*input_params) }
 
     let(:input_params) { [:p1] }
 
@@ -101,7 +101,7 @@ RSpec.describe OmniService::Sequence do
     end
 
     context 'with shortcut component' do
-      subject(:sequence) do
+      subject(:chain) do
         described_class.new(
           OmniService::Shortcut.new(cache_lookup),
           expensive_computation
@@ -120,14 +120,14 @@ RSpec.describe OmniService::Sequence do
       let(:expensive_computation) { ->(_, **) { Dry::Monads::Success(computed: true) } }
 
       it 'shortcuts when inner component succeeds' do
-        result = sequence.call({ cached: true })
+        result = chain.call({ cached: true })
 
         expect(result).to be_success & have_attributes(context: { from_cache: true })
         expect(result.shortcut).to be_truthy
       end
 
       it 'continues when inner component fails' do
-        result = sequence.call({ cached: false })
+        result = chain.call({ cached: false })
 
         expect(result).to be_success & have_attributes(context: { computed: true })
         expect(result.shortcut).to be_nil
@@ -136,7 +136,7 @@ RSpec.describe OmniService::Sequence do
   end
 
   describe '#signature' do
-    subject(:signature) { sequence.signature }
+    subject(:signature) { chain.signature }
 
     context 'when first component has context-only signature' do
       let(:component_a) { ->(**) {} }
