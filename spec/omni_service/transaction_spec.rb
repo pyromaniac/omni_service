@@ -176,21 +176,65 @@ RSpec.describe OmniService::Transaction do
           on_failure: [an_instance_of(OmniService::Result) & have_attributes(
             operation: on_failure.first,
             shortcut: nil,
-            params: [an_instance_of(OmniService::Result) & have_attributes(
-              operation: transaction,
-              shortcut: nil,
-              params: [{}],
-              context: {},
-              errors: [have_attributes(message: nil, code: :invalid, path: [], tokens: {})],
-              on_success: [],
-              on_failure: []
-            )],
+            params: [
+              {},
+              an_instance_of(OmniService::Result) & have_attributes(
+                operation: transaction,
+                shortcut: nil,
+                params: [{}],
+                context: {},
+                errors: [have_attributes(message: nil, code: :invalid, path: [], tokens: {})],
+                on_success: [],
+                on_failure: []
+              )
+            ],
             context: { test_simple: have_attributes(name: 'on_failure') },
             errors: [],
             on_success: [],
             on_failure: []
           )]
         )
+      end
+
+      context 'when callback has single positional arg' do
+        let(:on_failure) do
+          [lambda { |failed_result|
+            Dry::Monads::Success(received_error_codes: failed_result.errors.map(&:code))
+          }]
+        end
+
+        it 'passes only failed result for compatibility' do
+          expect(result.on_failure).to match([an_instance_of(OmniService::Result) & have_attributes(
+            params: [an_instance_of(OmniService::Result)],
+            context: { received_error_codes: [:invalid] }
+          )])
+        end
+      end
+
+      context 'when callback has multiple positional args' do
+        let(:on_failure) do
+          [lambda { |original_params, failed_result, **original_context|
+            Dry::Monads::Success(
+              original_params:,
+              failed_error_codes: failed_result.errors.map(&:code),
+              original_context:
+            )
+          }]
+        end
+
+        it 'passes params, failed result, and context' do
+          expect(result.on_failure).to match([an_instance_of(OmniService::Result) & have_attributes(
+            params: [
+              {},
+              an_instance_of(OmniService::Result) & have_attributes(errors: [have_attributes(code: :invalid)])
+            ],
+            context: {
+              original_params: {},
+              failed_error_codes: [:invalid],
+              original_context: {}
+            }
+          )])
+        end
       end
     end
 

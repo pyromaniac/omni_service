@@ -5,7 +5,9 @@
 #
 # Callbacks run asynchronously by default (configurable via OmniService.with_sync_callbacks).
 # on_success callbacks receive the same params and context as the main component.
-# on_failure callbacks receive the failed Result as their first param.
+# on_failure callbacks are backward-compatible:
+# - legacy single-argument callbacks receive only the failed Result
+# - multi-argument callbacks receive original params, then failed Result, and context
 #
 # @example Post creation with notifications
 #   transaction(
@@ -50,7 +52,7 @@ class OmniService::Transaction
 
     return result if result.success?
 
-    on_failure_results = on_failure_callbacks.map { |callback| callback.call(result) }
+    on_failure_results = on_failure_callbacks.map { |callback| call_on_failure_callback(callback, result) }
     result.merge(on_failure: result.on_failure + on_failure_results)
   end
 
@@ -85,6 +87,11 @@ class OmniService::Transaction
 
   def on_failure_callbacks
     @on_failure_callbacks ||= OmniService::Component.wrap(on_failure)
+  end
+
+  def call_on_failure_callback(callback, result)
+    # Preserve existing behavior for strictly single-argument callbacks.
+    callback.signature == [1, false] ? callback.call(result) : callback.call(*result.params, result, **result.context)
   end
 
   def on_success_promises(result)
