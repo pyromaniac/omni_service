@@ -6,6 +6,7 @@
 - **Chain**: Sequence component renamed to `Chain` (use `chain(...)` or `OmniService::Chain`)
 - **Component**: No longer mixes in `Dry::Monads[:result]`; include it explicitly if you rely on `Success`/`Failure` helpers
 - **Namespace**: Replaced `shared_params: true` with `from: []`; new `from:` option specifies extraction path (defaults to namespace)
+- **Result**: `to_monad` now returns `Success(context)` / `Failure(errors)` instead of wrapping the whole `Result`
 
 ### Changed
 
@@ -31,6 +32,7 @@
 - **Namespace**: Correctly handles components with splat signatures that consume all params
 - **Parallel**: Proper leftover params handling in distribution mode
 - **Context**: Missing optional keys no longer get written into context on success
+- **Helpers**: `process_errors` now accepts arrays of errors in addition to failed monads
 
 ## [0.1.0] - 2025-11-27
 

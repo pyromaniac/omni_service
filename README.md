@@ -60,7 +60,7 @@ result.success?  # no errors?
 result.failure?  # has errors?
 result.context   # { post: <Post>, author: <Author> }
 result.errors    # [#<Error code=:blank path=[:title]>]
-result.to_monad  # Success(result) or Failure(result)
+result.to_monad  # Success(context) or Failure(errors)
 ```
 
 ### Signature and Params Flow

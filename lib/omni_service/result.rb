@@ -26,7 +26,7 @@
 #   result.errors    # => [#<Error code=:blank path=[:title]>]
 #
 # @example Converting to monad
-#   result.to_monad  # => Success(result) or Failure(result)
+#   result.to_monad  # => Success(context) or Failure(errors)
 #
 class OmniService::Result
   extend Dry::Initializer
@@ -89,7 +89,7 @@ class OmniService::Result
   end
 
   def to_monad
-    success? ? Success(self) : Failure(self)
+    success? ? Success(context) : Failure(errors)
   end
 
   def deconstruct_keys(_)

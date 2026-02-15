@@ -278,18 +278,18 @@ RSpec.describe OmniService::Result do
     context 'when success' do
       let(:result) { described_class.build(operation) }
 
-      it 'returns Success wrapping self' do
+      it 'returns Success wrapping context' do
         expect(monad).to be_a(Dry::Monads::Success)
-        expect(monad.value!).to equal(result)
+        expect(monad.value!).to eq(result.context)
       end
     end
 
     context 'when failure' do
       let(:result) { described_class.build(operation, errors: [OmniService::Error.build(operation, code: :invalid)]) }
 
-      it 'returns Failure wrapping self' do
+      it 'returns Failure wrapping errors' do
         expect(monad).to be_a(Dry::Monads::Failure)
-        expect(monad.failure).to equal(result)
+        expect(monad.failure).to eq(result.errors)
       end
     end
   end
