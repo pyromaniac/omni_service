@@ -288,6 +288,35 @@ RSpec.describe OmniService::Transaction do
         end
       end
 
+      context 'with global callback executor' do
+        let(:callback_executor_ids) { Concurrent::Array.new }
+        let(:nested_callback_executor_ids) { Concurrent::Array.new }
+        let(:nested_transaction) do
+          described_class.new(
+            ->(_, **) { Dry::Monads::Success(nested: true) },
+            on_success: [lambda { |_, **|
+              nested_callback_executor_ids << OmniService::CallbackExecutor.executor.object_id
+              Dry::Monads::Success(nested_callback: true)
+            }]
+          )
+        end
+        let(:on_success) do
+          [lambda { |_, **|
+            callback_executor_ids << OmniService::CallbackExecutor.executor.object_id
+            nested_transaction.call({})
+          }]
+        end
+
+        it 'reuses one callback executor in nested callbacks' do
+          expect(result.on_success).to match([an_instance_of(Concurrent::Promises::Future)])
+
+          nested_result = result.on_success.first.value
+          nested_result.on_success.each(&:wait)
+
+          expect(callback_executor_ids).to eq(nested_callback_executor_ids)
+        end
+      end
+
       context 'with nested transactions as component' do
         let(:component) do
           described_class.new(

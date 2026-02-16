@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
 RSpec.describe OmniService do
-  it 'has a version number' do
-    expect(OmniService::VERSION).not_to be_nil
+  describe '::VERSION' do
+    subject(:version) { described_class::VERSION }
+
+    it 'has a version number' do
+      expect(version).not_to be_nil
+    end
   end
 end

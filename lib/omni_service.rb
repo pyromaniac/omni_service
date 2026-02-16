@@ -73,6 +73,7 @@ end
 
 require_relative 'omni_service/version'
 require_relative 'omni_service/strict'
+require_relative 'omni_service/callback_executor'
 require_relative 'omni_service/helpers'
 require_relative 'omni_service/inspect'
 require_relative 'omni_service/error'

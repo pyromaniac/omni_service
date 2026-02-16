@@ -14,6 +14,8 @@
 - **Parallel**: Signature calculation returns sum of component signatures (distribution semantics)
 - **Parallel**: Refactored params accumulation into separate methods for clarity
 - **Transaction**: `on_failure` callbacks now receive `*params, failed_result, **context` by default; strict single-argument callbacks (`[1, false]` signature) keep legacy `failed_result`-only behavior
+- **Transaction**: Async `on_success` callbacks now run on `OmniService::CallbackExecutor` (single global fixed-size pool) instead of global `:io`
+- **CallbackExecutor**: Global callback thread count is configured at boot via `OMNI_SERVICE_CALLBACK_THREADS`
 - **Namespace**: Signature now returns `[1, true]` by default, or delegates to component when `from: []`
 - **Namespace**: Now accepts array paths for deep nesting (e.g., `namespace([:user, :profile], component)`); single symbols are coerced to arrays
 - **Namespace**: Context merging simplified to use `deep_merge`

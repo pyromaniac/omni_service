@@ -175,6 +175,13 @@ transaction(
 )
 ```
 
+`on_success` callbacks run asynchronously on a global fixed thread pool (`1` thread by default).
+Configure thread count via environment variable before the process boots:
+
+```bash
+OMNI_SERVICE_CALLBACK_THREADS=3
+```
+
 ### namespace
 Scopes params/context under a key.
 

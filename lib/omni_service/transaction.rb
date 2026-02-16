@@ -4,6 +4,7 @@
 # Rolls back on failure; executes on_success callbacks after commit, on_failure after rollback.
 #
 # Callbacks run asynchronously by default (configurable via OmniService.with_sync_callbacks).
+# Async callback execution uses OmniService::CallbackExecutor (global fixed-size pool).
 # on_success callbacks receive the same params and context as the main component.
 # on_failure callbacks are backward-compatible:
 # - legacy single-argument callbacks receive only the failed Result
@@ -96,7 +97,7 @@ class OmniService::Transaction
 
   def on_success_promises(result)
     captured_sync = OmniService.sync_callbacks?
-    executor = captured_sync ? :immediate : :io
+    executor = captured_sync ? :immediate : OmniService::CallbackExecutor.executor
 
     on_success_callbacks.map do |callback|
       promise = Concurrent::Promises
