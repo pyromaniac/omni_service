@@ -109,8 +109,12 @@ module OmniService::Convenience
     OmniService::Namespace.new(...)
   end
 
+  def schema(**, &)
+    OmniService::Params.new(**, &)
+  end
+
   def params(**, &)
-    OmniService::Params.params(**, &)
+    OmniService::Params.new(**) { params(&) }
   end
 
   def context!(schema)

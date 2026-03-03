@@ -29,6 +29,7 @@
 - **Parallel**: `pack_params: true` option now supports merging multiple params by index position, not just first param
 - **Collection**: Support for hash-based collections in addition to arrays; keys are preserved in output
 - **Split**: New composition component that distributes params and fails fast on first failure or shortcut
+- **Params**: Added `schema { ... }` helper for full Dry::Validation contract DSL (`params`, `json`, `schema`, and rules) alongside existing `params { ... }`
 
 ### Fixed
 
@@ -36,6 +37,7 @@
 - **Parallel**: Proper leftover params handling in distribution mode
 - **Context**: Missing optional keys no longer get written into context on success
 - **Helpers**: `process_errors` now accepts arrays of errors in addition to failed monads
+- **Params**: `to_failure` now falls back to `message.meta[:code]` before `:invalid`, and excludes `:code` from error tokens
 
 ## [0.1.0] - 2025-11-27
 

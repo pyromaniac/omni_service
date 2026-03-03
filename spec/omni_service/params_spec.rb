@@ -14,12 +14,62 @@ RSpec.describe OmniService::Params do
     end.new
   end
 
-  describe '.params' do
-    subject(:params) { described_class.params { required(:name).filled(:string) } }
+  describe '.to_failure' do
+    subject(:failure) { described_class.to_failure(message) }
 
-    it 'creates a validator with inline contract' do
-      expect(params.call({ name: 'John' })).to be_success
-      expect(params.call({ name: '' })).to be_failure
+    let(:message) { contract.call(input).errors.first }
+
+    context 'when message responds to predicate' do
+      let(:contract) do
+        Class.new(Dry::Validation::Contract) do
+          params do
+            required(:name).filled(:string)
+          end
+        end.new
+      end
+      let(:input) { { name: '' } }
+
+      it 'prefers predicate as error code' do
+        expect(failure).to include(code: :filled?, message: 'must be filled', tokens: {})
+      end
+    end
+
+    context 'when message does not respond to predicate' do
+      let(:contract) do
+        Class.new(Dry::Validation::Contract) do
+          params do
+            required(:name).filled(:string)
+          end
+
+          rule(:name) do
+            key.failure(text: 'is invalid', code: :from_meta, minimum: 3) if value.length < 3
+          end
+        end.new
+      end
+      let(:input) { { name: 'ab' } }
+
+      it 'uses meta code as fallback' do
+        expect(failure).to include(code: :from_meta, message: 'is invalid', tokens: { minimum: 3 })
+      end
+    end
+
+    context 'when message has no predicate and no meta code' do
+      let(:contract) do
+        Class.new(Dry::Validation::Contract) do
+          params do
+            required(:name).filled(:string)
+          end
+
+          rule(:name) do
+            key.failure('is invalid') if value == 'x'
+          end
+        end.new
+      end
+      let(:input) { { name: 'x' } }
+
+      it 'uses invalid as final fallback' do
+        expect(failure).to include(code: :invalid, message: 'is invalid', tokens: {})
+      end
     end
   end
 

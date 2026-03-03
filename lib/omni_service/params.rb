@@ -45,16 +45,15 @@ class OmniService::Params
   option :optional, OmniService::Types::Bool, default: proc { false }
 
   def self.to_failure(message)
-    {
-      code: (message.predicate if message.respond_to?(:predicate)) || :invalid,
-      message: message.dump,
-      path: message.path,
-      tokens: message.respond_to?(:meta) ? message.meta : {}
-    }
-  end
+    message_meta = message.respond_to?(:meta) ? message.meta.to_h : {}
+    message_text = message.respond_to?(:text) ? message.text : message.dump
 
-  def self.params(**, &)
-    new(**) { params(&) }
+    {
+      code: (message.predicate if message.respond_to?(:predicate)) || message_meta[:code] || :invalid,
+      message: message_text,
+      path: message.path,
+      tokens: message_meta.except(:code)
+    }
   end
 
   def initialize(contract = nil, **, &)

@@ -205,6 +205,24 @@ chain(
 )
 ```
 
+### params and schema
+Use `params { ... }` for concise `Contract.params` definitions. Use `schema { ... }` for full
+contract DSL (`params`, `json`, `schema`, and `rule`).
+
+```ruby
+params { required(:title).filled(:string) }
+
+schema do
+  json do
+    required(:title).filled(:string)
+  end
+
+  rule(:title) do
+    key.failure(text: 'is invalid', code: :too_short, minimum: 3) if value.length < 3
+  end
+end
+```
+
 ### collection
 Iterates over arrays.
 
