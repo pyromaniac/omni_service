@@ -44,13 +44,14 @@ class OmniService::Namespace
   option :optional, OmniService::Types::Bool, default: -> { false }
 
   def call(*params, **context)
-    return skip_result(params, context) if optional && !from_key_present?(params)
-    return missing_key_result(params, context) unless from.empty? || from_key_present?(params)
+    return process_result(params, context) if from.empty?
 
-    base_context, namespaced_context, inner_context = prepare_contexts(context)
-    inner_result = component_wrapper.call(*prepare_params(params), **inner_context)
+    namespace_presence = params_to_check(params).map { |param| key_path_exists?(param, *from) }
 
-    transform_result(inner_result, context, base_context.keys, namespaced_context)
+    return skipped_result(params, context) if optional && namespace_presence.none?
+    return missing_key_result(params, context) if namespace_presence.none?
+
+    process_result(params, context)
   end
 
   def signature
@@ -91,7 +92,8 @@ class OmniService::Namespace
   end
 
   def extract_from_param(param, index, params_count)
-    return param unless index < params_count && key_path_exists?(param, *from)
+    return param unless index < params_count
+    return {} unless key_path_exists?(param, *from)
 
     param.dig(*from) || {}
   end
@@ -106,8 +108,25 @@ class OmniService::Namespace
     errors.map { |error| error.new(path: [*namespace, *error.path]) }
   end
 
-  def from_key_present?(params)
-    from.empty? || params.any? { |param| key_path_exists?(param, *from) }
+  def process_result(params, context)
+    base_context, namespaced_context, inner_context = prepare_contexts(context)
+    inner_result = component_wrapper.call(*prepare_params(params), **inner_context)
+
+    transform_result(inner_result, context, base_context.keys, namespaced_context)
+  end
+
+  def skipped_result(params, context)
+    OmniService::Result.build(self, params: params.map { {} }, context:)
+  end
+
+  def params_to_check(params)
+    params_count = component_wrapper.signature[0]
+
+    if params_count.nil? || params_count.zero?
+      params
+    else
+      params.first(params_count)
+    end
   end
 
   def key_path_exists?(hash, key, *rest)
@@ -115,10 +134,6 @@ class OmniService::Namespace
     return true if rest.empty?
 
     key_path_exists?(hash[key], *rest)
-  end
-
-  def skip_result(params, context)
-    OmniService::Result.build(self, params:, context:)
   end
 
   def missing_key_result(params, context)

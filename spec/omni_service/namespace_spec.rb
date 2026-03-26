@@ -131,10 +131,33 @@ RSpec.describe OmniService::Namespace do
       context 'when second param lacks namespace key' do
         subject(:result) { namespace_component.call({ author: { name: 'John' } }, { other_data: 'value' }) }
 
-        it 'wraps all inner params including passed-through ones' do
+        it 'coerces missing consumed params to empty hashes' do
           expect(result).to be_success & have_attributes(
-            params: [{ author: { name: 'John' } }, { author: { other_data: 'value' } }],
-            context: { author: { first: { name: 'John' }, second: { other_data: 'value' } } }
+            params: [{ author: { name: 'John' } }, { author: {} }],
+            context: { author: { first: { name: 'John' }, second: {} } }
+          )
+        end
+      end
+
+      context 'when first param lacks namespace key' do
+        subject(:result) { namespace_component.call({ other_data: 'value' }, { author: { bio: 'Writer' } }) }
+
+        it 'coerces missing consumed params to empty hashes' do
+          expect(result).to be_success & have_attributes(
+            params: [{ author: {} }, { author: { bio: 'Writer' } }],
+            context: { author: { first: {}, second: { bio: 'Writer' } } }
+          )
+        end
+      end
+
+      context 'when neither param has namespace key' do
+        subject(:result) { namespace_component.call({ other_data: 'value' }, { more_data: 'value' }) }
+
+        it 'returns failure with missing error' do
+          expect(result).to be_failure & have_attributes(
+            params: [{ other_data: 'value' }, { more_data: 'value' }],
+            context: {},
+            errors: [have_attributes(code: :missing, path: [:author])]
           )
         end
       end
@@ -375,9 +398,9 @@ RSpec.describe OmniService::Namespace do
     context 'when namespace key is missing' do
       subject(:result) { namespace_component.call({ title: 'Hello' }, blog: 'tech') }
 
-      it 'skips the component and returns success with unchanged params and context' do
+      it 'skips the component and returns empty replacement params' do
         expect(result).to be_success & have_attributes(
-          params: [{ title: 'Hello' }],
+          params: [{}],
           context: { blog: 'tech' }
         )
       end
@@ -412,13 +435,24 @@ RSpec.describe OmniService::Namespace do
     context 'with multi-param component' do
       let(:author_component) { ->(first, second, **) { Dry::Monads::Success(first: first, second: second) } }
 
+      context 'when namespace key is in first param only' do
+        subject(:result) { namespace_component.call({ author: { name: 'John' } }, { other: 'data' }) }
+
+        it 'coerces missing consumed params to empty hashes' do
+          expect(result).to be_success & have_attributes(
+            params: [{ author: { name: 'John' } }, { author: {} }],
+            context: { author: { first: { name: 'John' }, second: {} } }
+          )
+        end
+      end
+
       context 'when namespace key is in second param only' do
         subject(:result) { namespace_component.call({ other: 'data' }, { author: { bio: 'Writer' } }) }
 
-        it 'calls the component and wraps all params' do
+        it 'coerces missing consumed params to empty hashes' do
           expect(result).to be_success & have_attributes(
-            params: [{ author: { other: 'data' } }, { author: { bio: 'Writer' } }],
-            context: { author: { first: { other: 'data' }, second: { bio: 'Writer' } } }
+            params: [{ author: {} }, { author: { bio: 'Writer' } }],
+            context: { author: { first: {}, second: { bio: 'Writer' } } }
           )
         end
       end
@@ -428,10 +462,26 @@ RSpec.describe OmniService::Namespace do
 
         it 'skips the component' do
           expect(result).to be_success & have_attributes(
-            params: [{ other: 'data' }, { more: 'info' }],
+            params: [{}, {}],
             context: {}
           )
         end
+      end
+    end
+
+    context 'when skipped in fanout' do
+      subject(:result) do
+        OmniService::Fanout.new(
+          namespace_component,
+          ->(params, **) { Dry::Monads::Success[params, validated: true] }
+        ).call({ title: 'Hello' })
+      end
+
+      it 'does not emit original params from the skipped branch' do
+        expect(result).to be_success & have_attributes(
+          params: [{}, { title: 'Hello' }],
+          context: { validated: true }
+        )
       end
     end
 
@@ -455,7 +505,7 @@ RSpec.describe OmniService::Namespace do
 
         it 'skips the component and returns success' do
           expect(result).to be_success & have_attributes(
-            params: [{ title: 'Hello' }],
+            params: [{}],
             context: { blog: 'tech' }
           )
         end
@@ -475,7 +525,7 @@ RSpec.describe OmniService::Namespace do
 
       it 'processes required namespace and skips optional one' do
         expect(result).to be_success & have_attributes(
-          params: [{ author: { name: 'John' } }],
+          params: [{}],
           context: { author: { validated: true } }
         )
       end

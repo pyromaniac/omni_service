@@ -34,6 +34,7 @@
 ### Fixed
 
 - **Namespace**: Correctly handles components with splat signatures that consume all params
+- **Namespace**: Missing consumed params now produce `{}` placeholders instead of wrapping the original param, and `optional: true` skips return empty hash replacements for each incoming param
 - **Parallel**: Proper leftover params handling in distribution mode
 - **Context**: Missing optional keys no longer get written into context on success
 - **Helpers**: `process_errors` now accepts arrays of errors in addition to failed monads
