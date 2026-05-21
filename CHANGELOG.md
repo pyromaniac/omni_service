@@ -5,6 +5,7 @@
 - **Context**: `Context.new` now requires `raise_on_error`, and validators must respond to `#call` and `#try`; `context()` no longer raises on invalid context, use `context!` to raise
 - **Chain**: Sequence component renamed to `Chain` (use `chain(...)` or `OmniService::Chain`)
 - **Component**: No longer mixes in `Dry::Monads[:result]`; include it explicitly if you rely on `Success`/`Failure` helpers
+- **Error**: `to_hash` and `to_h` now return only public error payload fields, excluding `component` and empty values
 - **Namespace**: Replaced `shared_params: true` with `from: []`; new `from:` option specifies extraction path (defaults to namespace)
 - **Result**: `to_monad` now returns `Success(context)` / `Failure(errors)` instead of wrapping the whole `Result`
 
