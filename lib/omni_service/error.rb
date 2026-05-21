@@ -53,4 +53,15 @@ class OmniService::Error < Dry::Struct
   def self.build(component, **)
     new(message: nil, code: nil, path: [], tokens: {}, **, component:)
   end
+
+  def to_hash
+    hash = {}
+    hash[:code] = code if code
+    hash[:message] = message if message && !message.empty?
+    hash[:path] = path
+    hash[:tokens] = tokens unless tokens.empty?
+    hash
+  end
+
+  alias to_h to_hash
 end
