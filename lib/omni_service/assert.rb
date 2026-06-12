@@ -16,13 +16,9 @@ class OmniService::Assert
   include OmniService::Inspect.new(:predicate, :code, :path)
   include OmniService::Strict
 
-  param :predicate, OmniService::Path::NonEmptySegments
+  param :predicate, OmniService::Path::CoercibleNonEmptySegments
   option :code, OmniService::Types::Symbol
   option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new(call_methods: true, expand_arrays: true) }
-
-  def initialize(predicate, **)
-    super(Array(predicate), **)
-  end
 
   def call(*params, **context)
     failed_references = path.call(context, predicate).reject { |reference| reference.resolved? && reference.value }

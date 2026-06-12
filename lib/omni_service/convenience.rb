@@ -133,6 +133,10 @@ module OmniService::Convenience
     OmniService::Refute.new(...)
   end
 
+  def remap(**mapping)
+    OmniService::Remap.new(mapping)
+  end
+
   def component(name, from = Object, **options, &block)
     raise ArgumentError, "Please provide either a superclass or a block for #{name}" unless from || block
 

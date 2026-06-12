@@ -62,4 +62,14 @@ RSpec.describe OmniService::Convenience do
       )
     end
   end
+
+  describe '#remap' do
+    subject(:remap_component) { operation_class.remap(current_account: :account) }
+
+    it 'builds a remap component' do
+      expect(remap_component).to be_a(OmniService::Remap) & have_attributes(
+        mapping: { current_account: :account }
+      )
+    end
+  end
 end

@@ -44,6 +44,8 @@ class OmniService::Path
   Segment = OmniService::Types::Symbol | OmniService::Types::Integer
   Segments = OmniService::Types::Array.of(Segment)
   NonEmptySegments = Segments.constrained(min_size: 1)
+  CoercibleSegments = OmniService::Types::Coercible::Array.of(Segment)
+  CoercibleNonEmptySegments = CoercibleSegments.constrained(min_size: 1)
 
   Reference = Class.new(Dry::Struct) do
     attribute :path, OmniService::Path::Segments

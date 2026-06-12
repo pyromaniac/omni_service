@@ -205,6 +205,22 @@ chain(
 )
 ```
 
+### remap
+Copies values from accumulated context to new context keys. Source and target can be single keys
+or nested paths.
+
+```ruby
+chain(
+  find_post,
+  remap(%i[post author] => :author),
+  create_comment
+)
+
+remap(current_user: :author)
+remap(primary_tag_ids: :tag_ids, secondary_tag_ids: :tag_ids)
+# Multiple sources targeting the same key concatenate scalar and array values into one array.
+```
+
 ### assert and refute
 Context-only predicate guards. They do not consume or transform params; they only validate accumulated
 context and fail with the configured code and resolved path when the predicate does not match.
