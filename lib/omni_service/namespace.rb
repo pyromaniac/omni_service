@@ -34,19 +34,20 @@ require 'active_support/core_ext/hash/deep_merge'
 #
 class OmniService::Namespace
   extend Dry::Initializer
-  include Dry::Equalizer(:namespace, :component, :from, :optional)
-  include OmniService::Inspect.new(:namespace, :component, :from, :optional)
+  include Dry::Equalizer(:namespace, :component, :from, :optional, :path)
+  include OmniService::Inspect.new(:namespace, :component, :from, :optional, :path)
   include OmniService::Strict
 
   param :namespace, OmniService::Types::Coercible::Array.of(OmniService::Types::Symbol)
-  param :component, OmniService::Types::Interface(:call)
+  param :component, OmniService::Types::Callable
   option :from, OmniService::Types::Coercible::Array.of(OmniService::Types::Symbol), default: -> { namespace }
   option :optional, OmniService::Types::Bool, default: -> { false }
+  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new }
 
   def call(*params, **context)
     return process_result(params, context) if from.empty?
 
-    namespace_presence = params_to_check(params).map { |param| key_path_exists?(param, *from) }
+    namespace_presence = params_to_check(params).map { |param| path.call(param, from).first.resolved? }
 
     return skipped_result(params, context) if optional && namespace_presence.none?
     return missing_key_result(params, context) if namespace_presence.none?
@@ -77,7 +78,7 @@ class OmniService::Namespace
 
   def prepare_contexts(context)
     base = context.except(namespace.first)
-    namespaced = context.dig(*namespace) || {}
+    namespaced = path.call(context, namespace).first.value || {}
     inner = namespaced.is_a?(Hash) ? base.merge(namespaced) : base
     [base, namespaced, inner]
   end
@@ -93,9 +94,9 @@ class OmniService::Namespace
 
   def extract_from_param(param, index, params_count)
     return param unless index < params_count
-    return {} unless key_path_exists?(param, *from)
 
-    param.dig(*from) || {}
+    reference = path.call(param, from).first
+    reference.resolved? ? reference.value || {} : {}
   end
 
   def wrap_value(value, skip_empty: true)
@@ -127,13 +128,6 @@ class OmniService::Namespace
     else
       params.first(params_count)
     end
-  end
-
-  def key_path_exists?(hash, key, *rest)
-    return false unless hash.is_a?(Hash) && hash.key?(key)
-    return true if rest.empty?
-
-    key_path_exists?(hash[key], *rest)
   end
 
   def missing_key_result(params, context)

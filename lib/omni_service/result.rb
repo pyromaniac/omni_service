@@ -34,8 +34,8 @@ class OmniService::Result
   include Dry::Equalizer(:operation, :params, :context, :errors, :on_success, :on_failure)
   include OmniService::Inspect.new(:operation, :params, :context, :errors, :on_success, :on_failure)
 
-  option :operation, type: OmniService::Types::Interface(:call)
-  option :shortcut, type: OmniService::Types::Interface(:call).optional, default: proc {}
+  option :operation, type: OmniService::Types::Callable
+  option :shortcut, type: OmniService::Types::Callable.optional, default: proc {}
   option :params, type: OmniService::Types::Array
   option :context, type: OmniService::Types::Hash.map(OmniService::Types::Symbol, OmniService::Types::Any)
   option :errors, type: OmniService::Types::Array.of(OmniService::Error)

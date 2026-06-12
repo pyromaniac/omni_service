@@ -42,10 +42,10 @@ class OmniService::Transaction
     end
   end
 
-  param :component, OmniService::Types::Interface(:call)
-  option :on_success, OmniService::Types::Coercible::Array.of(OmniService::Types::Interface(:call)),
+  param :component, OmniService::Types::Callable
+  option :on_success, OmniService::Types::Coercible::Array.of(OmniService::Types::Callable),
     default: proc { [] }
-  option :on_failure, OmniService::Types::Coercible::Array.of(OmniService::Types::Interface(:call)),
+  option :on_failure, OmniService::Types::Coercible::Array.of(OmniService::Types::Callable),
     default: proc { [] }
 
   def call(*params, **context)

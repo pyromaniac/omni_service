@@ -6,7 +6,7 @@
 #
 # Options:
 # - :with - param key for IDs array (default: :"#{context_key.singularize}_ids")
-# - :by - column mapping with nested paths: { id: [:items, :product_id] }
+# - :by - column mapping with nested paths: { id: [:comments, :id] }
 # - :repository - single repo or Hash for polymorphic lookup
 # - :type - path to type discriminator for polymorphic lookup
 #
@@ -19,9 +19,9 @@
 #   # params: { post_ids: [1, 2, 3] } => Success(posts: [<Post>, <Post>, <Post>])
 #
 # @example Nested IDs in array of hashes
-#   FindMany.new(:products, repository: repo, by: { id: [:items, :product_id] })
-#   # params: { items: [{ product_id: 1 }, { product_id: [2, 3] }] }
-#   # => Success(products: [<Product>, <Product>, <Product>])
+#   FindMany.new(:comments, repository: repo, by: { id: [:comments, :id] })
+#   # params: { comments: [{ id: 1 }, { id: [2, 3] }] }
+#   # => Success(comments: [<Comment>, <Comment>, <Comment>])
 #
 # @example Error reporting with indices
 #   # params: { post_ids: [1, 999, 3] } where 999 doesn't exist
@@ -38,45 +38,37 @@
 #
 class OmniService::FindMany
   extend Dry::Initializer
-  include Dry::Core::Constants
   include Dry::Monads[:result]
-  include OmniService::Inspect.new(:context_key, :repository, :lookup, :omittable)
+  include OmniService::Inspect.new(:context_key, :repository, :lookup, :omittable, :path)
 
   PRIMARY_KEY = :id
 
-  Reference = Class.new(Dry::Struct) do
-    attribute :path, OmniService::Types::Array.of(OmniService::Types::Symbol | OmniService::Types::Integer)
-    attribute :value, OmniService::Types::Any
+  Lookup = Class.new(Dry::Struct) do
+    extend Forwardable
 
-    def undefined?
-      Undefined.equal?(value)
+    attribute :id, OmniService::Path::Reference
+    attribute :type, OmniService::Types::Nil | OmniService::Path::Reference
+
+    def_delegators :id, :path, :value, :normalized_value
+
+    def missing?
+      id.missing? || type&.missing?
     end
 
     def missing_id_path
-      path if undefined?
-    end
-
-    def missing_type_path; end
-
-    def normalized_value
-      Array.wrap(value)
-    end
-  end
-
-  PolymorphicReference = Class.new(Dry::Struct) do
-    extend Forwardable
-
-    attribute :type, Reference
-    attribute :id, Reference
-
-    def_delegators :id, :path, :missing_id_path
-
-    def undefined?
-      type.undefined? || id.undefined?
+      id.path if id.missing?
     end
 
     def missing_type_path
-      type.missing_id_path unless id.value.nil?
+      type.path if type&.missing? && (id.missing? || !id.value.nil?)
+    end
+
+    def invalid_type_path(repository)
+      type.path if type && !repository.key?(type.value)
+    end
+
+    def type_value
+      type.value
     end
   end
 
@@ -91,6 +83,7 @@ class OmniService::FindMany
       OmniService::Types::Array.of(OmniService::Types::Symbol)), optional: true
   option :omittable, OmniService::Types::Bool, default: proc { false }
   option :nullable, OmniService::Types::Bool, default: proc { false }
+  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new(expand_arrays: true) }
 
   def call(params, **context)
     return Success({}) if already_found?(context)
@@ -126,61 +119,57 @@ class OmniService::FindMany
 
   def references(params)
     result = pointers.index_with do |pointer|
-      undefined_references, references = pointer_references(params, *pointer).partition(&:undefined?)
+      missing_references, references = pointer_references(params, pointer).partition(&:missing?)
 
-      [references, missing_paths(undefined_references), invalid_type_paths(references)]
+      [references, missing_paths(missing_references), invalid_type_paths(references)]
     end
 
     [result.transform_values(&:first), result.values.flat_map(&:second), result.values.flat_map(&:third)]
   end
 
-  def pointer_references(params, segment = nil, *pointer, path: [], type_reference: Undefined)
-    return [id_reference(params, path, type_reference)] unless segment
+  def pointer_references(params, pointer)
+    id_references = path.call(params, pointer)
+    id_references = [] if missing_nested_root?(params, pointer, id_references)
 
-    case params
-    when Array
-      params.flat_map.with_index do |value, index|
-        pointer_references(value, segment, *pointer, path: [*path, index], type_reference:)
-      end
-    when Hash
-      hash_pointer_references(params, segment, *pointer, path:, type_reference:)
-    else
-      []
-    end
+    id_references.map { |reference| build_lookup(params, reference) }
   end
 
-  def hash_pointer_references(params, segment, *pointer, path:, type_reference:)
-    type_reference = type_reference(params, path) if polymorphic? && path.grep(Symbol) == type[..-2]
-    pointer_references(
-      params.key?(segment) ? params[segment] : Undefined,
-      *pointer,
-      path: [*path, segment],
-      type_reference:
-    )
+  def missing_nested_root?(params, pointer, references)
+    pointer.size > 1 &&
+      references.one? &&
+      references.first.missing? &&
+      params.is_a?(Hash) &&
+      !params.key?(pointer.first)
   end
 
-  def type_reference(params, path)
-    Reference.new(path: [*path, type.last], value: params.key?(type.last) ? params[type.last] : Undefined)
+  def build_lookup(params, id_reference)
+    Lookup.new(id: id_reference, type: lookup_type(params, id_reference))
   end
 
-  def id_reference(params, path, type_reference)
-    id_reference = Reference.new(path:, value: params)
-    polymorphic? ? PolymorphicReference.new(type: type_reference, id: id_reference) : id_reference
+  def lookup_type(params, id_reference)
+    type_reference(params, id_reference) if polymorphic?
   end
 
-  def missing_paths(undefined_references)
-    missing_id_paths = omittable ? [] : undefined_references.filter_map(&:missing_id_path)
-    missing_type_paths = undefined_references.filter_map(&:missing_type_path)
+  def type_reference(params, id_reference)
+    parent_path = id_reference.path[..-2]
+    return missing_type_reference(parent_path) unless parent_path.grep(Symbol) == type[..-2]
+
+    path.call(params, [*parent_path, type.last], expand_arrays: false).first
+  end
+
+  def missing_type_reference(parent_path)
+    OmniService::Path::Reference.new(path: [*parent_path, type.last], value: nil, resolved: false)
+  end
+
+  def missing_paths(missing_references)
+    missing_id_paths = omittable ? [] : missing_references.filter_map(&:missing_id_path)
+    missing_type_paths = missing_references.filter_map(&:missing_type_path)
 
     missing_id_paths + missing_type_paths
   end
 
   def invalid_type_paths(references)
-    if polymorphic?
-      references.filter_map { |reference| reference.type.path unless repository.key?(reference.type.value) }
-    else
-      []
-    end
+    references.filter_map { |reference| reference.invalid_type_path(repository) }
   end
 
   def find(references)
@@ -189,7 +178,7 @@ class OmniService::FindMany
     column = columns.first
 
     if polymorphic?
-      type_references = references[pointer].group_by { |reference| reference.type.value }
+      type_references = references[pointer].group_by(&:type_value)
       result, not_found_paths = fetch_polymorphic(type_references, column)
     else
       result, not_found_paths = fetch(references[pointer], column, repository)

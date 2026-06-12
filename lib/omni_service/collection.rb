@@ -26,7 +26,7 @@ class OmniService::Collection
   include OmniService::Inspect.new(:component)
   include OmniService::Strict
 
-  param :component, OmniService::Types::Interface(:call)
+  param :component, OmniService::Types::Callable
   option :namespace, OmniService::Types::Symbol
 
   def call(*params, **context)

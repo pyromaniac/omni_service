@@ -40,4 +40,26 @@ RSpec.describe OmniService::Convenience do
       )
     end
   end
+
+  describe '#assert' do
+    subject(:assert_component) { operation_class.assert(:authorized, code: :unauthorized) }
+
+    it 'builds an assert component' do
+      expect(assert_component).to be_a(OmniService::Assert) & have_attributes(
+        predicate: [:authorized],
+        code: :unauthorized
+      )
+    end
+  end
+
+  describe '#refute' do
+    subject(:refute_component) { operation_class.refute(:archived, code: :already_archived) }
+
+    it 'builds a refute component' do
+      expect(refute_component).to be_a(OmniService::Refute) & have_attributes(
+        predicate: [:archived],
+        code: :already_archived
+      )
+    end
+  end
 end

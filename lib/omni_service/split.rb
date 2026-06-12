@@ -16,7 +16,7 @@ class OmniService::Split
   include OmniService::Inspect.new(:components)
   include OmniService::Strict
 
-  param :components, OmniService::Types::Array.of(OmniService::Types::Interface(:call)).constrained(min_size: 1)
+  param :components, OmniService::Types::Array.of(OmniService::Types::Callable).constrained(min_size: 1)
 
   def initialize(*args, **)
     super(args.flatten(1), **)

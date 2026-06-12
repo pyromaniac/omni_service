@@ -125,6 +125,14 @@ module OmniService::Convenience
     OmniService::Context.new(schema, raise_on_error: false)
   end
 
+  def assert(...)
+    OmniService::Assert.new(...)
+  end
+
+  def refute(...)
+    OmniService::Refute.new(...)
+  end
+
   def component(name, from = Object, **options, &block)
     raise ArgumentError, "Please provide either a superclass or a block for #{name}" unless from || block
 

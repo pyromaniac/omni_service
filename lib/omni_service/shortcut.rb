@@ -25,7 +25,7 @@ class OmniService::Shortcut
   include OmniService::Inspect.new(:component)
   include OmniService::Strict
 
-  param :component, OmniService::Types::Interface(:call)
+  param :component, OmniService::Types::Callable
 
   def call(*params, **context)
     result = component_wrapper.call(*params, **context)

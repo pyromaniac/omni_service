@@ -31,6 +31,7 @@
 - **Collection**: Support for hash-based collections in addition to arrays; keys are preserved in output
 - **Split**: New composition component that distributes params and fails fast on first failure or shortcut
 - **Params**: Added `schema { ... }` helper for full Dry::Validation contract DSL (`params`, `json`, `schema`, and rules) alongside existing `params { ... }`
+- **Assert/Refute**: New context predicate preconditions for declarative guard checks
 
 ### Fixed
 

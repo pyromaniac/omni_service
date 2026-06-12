@@ -205,6 +205,22 @@ chain(
 )
 ```
 
+### assert and refute
+Context-only predicate guards. They do not consume or transform params; they only validate accumulated
+context and fail with the configured code and resolved path when the predicate does not match.
+
+```ruby
+chain(
+  find_post,
+  assert(%i[post published?], code: :not_published),
+  refute(%i[post archived?], code: :already_archived),
+  publish_post
+)
+
+assert([:comments, 0, :valid?], code: :first_comment_invalid)
+refute(:draft, code: :already_draft)
+```
+
 ### params and schema
 Use `params { ... }` for concise `Contract.params` definitions. Use `schema { ... }` for full
 contract DSL (`params`, `json`, `schema`, and `rule`).
@@ -302,8 +318,8 @@ FindMany.new(:posts, repository: repo)
 # params: { post_ids: [1, 2, 3] } => Success(posts: [...])
 
 # Nested IDs
-FindMany.new(:products, repository: repo, by: { id: [:items, :product_id] })
-# params: { items: [{ product_id: 1 }, { product_id: [2, 3] }] }
+FindMany.new(:comments, repository: repo, by: { id: [:comments, :id] })
+# params: { comments: [{ id: 1 }, { id: [2, 3] }] }
 ```
 
 ## Error Format

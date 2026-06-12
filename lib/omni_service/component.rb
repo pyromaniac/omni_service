@@ -33,7 +33,7 @@ class OmniService::Component
   ].freeze
   DEFAULT_NAMES_MAP = { rest: '*', keyrest: '**' }.freeze # Ruby 3.0, 3.1
 
-  param :callable, OmniService::Types::Interface(:call)
+  param :callable, OmniService::Types::Callable
 
   def self.wrap(value)
     if value.is_a?(Array)

@@ -27,10 +27,10 @@
 #   Failure([{ code: :too_short, path: [:body], tokens: { min: 100 } }])
 #
 class OmniService::Error < Dry::Struct
-  attribute :component, OmniService::Types::Interface(:call)
+  attribute :component, OmniService::Types::Callable
   attribute :message, OmniService::Types::Strict::String.optional
   attribute :code, OmniService::Types::Strict::Symbol.optional
-  attribute :path, OmniService::Types::Coercible::Array.of(OmniService::Types::Symbol | OmniService::Types::Integer)
+  attribute :path, OmniService::Types::Coercible::Array.of(OmniService::Path::Segment)
   attribute :tokens, OmniService::Types::Hash.map(OmniService::Types::Symbol, OmniService::Types::Any)
 
   def self.process(component, failure)

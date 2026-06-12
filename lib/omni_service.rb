@@ -44,6 +44,7 @@ module OmniService
   include Dry::Core::Constants
 
   Types = Dry.Types()
+  Types::Callable = Types::Interface(:call)
 
   # Exception raised by call! when operation fails.
   # Contains the full operation result for inspection.
@@ -76,11 +77,14 @@ require_relative 'omni_service/strict'
 require_relative 'omni_service/callback_executor'
 require_relative 'omni_service/helpers'
 require_relative 'omni_service/inspect'
+require_relative 'omni_service/path'
 require_relative 'omni_service/error'
 require_relative 'omni_service/result'
 require_relative 'omni_service/component'
 require_relative 'omni_service/context'
 require_relative 'omni_service/params'
+require_relative 'omni_service/assert'
+require_relative 'omni_service/refute'
 require_relative 'omni_service/chain'
 require_relative 'omni_service/parallel'
 require_relative 'omni_service/fanout'

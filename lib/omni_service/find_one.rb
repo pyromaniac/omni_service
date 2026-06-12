@@ -49,7 +49,7 @@
 class OmniService::FindOne
   extend Dry::Initializer
   include Dry::Monads[:result]
-  include OmniService::Inspect.new(:context_key, :repository, :lookup, :omittable, :nullable)
+  include OmniService::Inspect.new(:context_key, :repository, :lookup, :omittable, :nullable, :path)
 
   PRIMARY_KEY = :id
 
@@ -65,6 +65,7 @@ class OmniService::FindOne
   option :omittable, OmniService::Types::Bool, default: proc { false }
   option :nullable, OmniService::Types::Bool, default: proc { false }
   option :skippable, OmniService::Types::Bool, default: proc { false }
+  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new }
 
   def call(params, **context)
     return Success({}) if already_found?(context)
@@ -88,10 +89,7 @@ class OmniService::FindOne
   end
 
   def missing_keys(params, paths)
-    paths.reject do |path|
-      deep_object = path.one? ? params : params.dig(*path[..-2])
-      deep_object.is_a?(Hash) && deep_object.key?(path.last)
-    end
+    path_references(params, paths).select(&:missing?).map(&:path)
   end
 
   def missing_keys_result(missing_keys, context)
@@ -109,12 +107,12 @@ class OmniService::FindOne
   end
 
   def values(params)
-    pointers.map { |pointer| params.dig(*pointer) }
+    path_references(params, pointers).map(&:value)
   end
 
   def resolve_repository(params)
     if repository.is_a?(Hash)
-      repository[params.dig(*type)]
+      repository[path.call(params, type).first.value]
     else
       repository
     end
@@ -168,5 +166,9 @@ class OmniService::FindOne
     else
       Array.wrap(by || PRIMARY_KEY)
     end
+  end
+
+  def path_references(params, paths)
+    paths.map { |path_segments| path.call(params, path_segments).first }
   end
 end
