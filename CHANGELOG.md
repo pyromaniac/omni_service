@@ -33,6 +33,7 @@
 - **Params**: Added `schema { ... }` helper for full Dry::Validation contract DSL (`params`, `json`, `schema`, and rules) alongside existing `params { ... }`
 - **Assert/Refute**: New context predicate preconditions for declarative guard checks
 - **Remap**: New context projection component for copying nested context values to new keys
+- **Dispatch**: New context-based routing component that selects exactly one branch by resolved value
 
 ### Fixed
 

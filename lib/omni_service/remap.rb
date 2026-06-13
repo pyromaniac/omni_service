@@ -17,7 +17,7 @@
 class OmniService::Remap
   extend Dry::Initializer
   include Dry::Equalizer(:mapping, :path)
-  include OmniService::Inspect.new(:mapping, :path)
+  include OmniService::Inspect.new(:mapping, :path, hide_defaults: :path)
   include OmniService::Strict
 
   param :mapping, OmniService::Types::Hash.map(

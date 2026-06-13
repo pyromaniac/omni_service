@@ -35,7 +35,7 @@ require 'active_support/core_ext/hash/deep_merge'
 class OmniService::Namespace
   extend Dry::Initializer
   include Dry::Equalizer(:namespace, :component, :from, :optional, :path)
-  include OmniService::Inspect.new(:namespace, :component, :from, :optional, :path)
+  include OmniService::Inspect.new(:namespace, :component, :from, :optional, :path, hide_defaults: :path)
   include OmniService::Strict
 
   param :namespace, OmniService::Types::Coercible::Array.of(OmniService::Types::Symbol)

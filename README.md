@@ -307,6 +307,27 @@ transaction(
 )
 ```
 
+### dispatch
+Routes execution to one branch selected by context. Unlike `either`, branch failure is final:
+`dispatch` does not try another branch after selecting one.
+
+```ruby
+dispatch(:role,
+  admin: publish_as_admin,
+  editor: publish_as_editor
+)
+
+dispatch(:role, :unknown_role,
+  admin: publish_as_admin,
+  editor: publish_as_editor
+)
+
+dispatch(%i[event type],
+  created: create_event,
+  updated: update_event
+)
+```
+
 ## Entity Lookup
 
 ### FindOne

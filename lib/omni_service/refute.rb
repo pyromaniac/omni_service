@@ -13,7 +13,7 @@
 class OmniService::Refute
   extend Dry::Initializer
   include Dry::Equalizer(:predicate, :code, :path)
-  include OmniService::Inspect.new(:predicate, :code, :path)
+  include OmniService::Inspect.new(:predicate, :code, :path, hide_defaults: :path)
   include OmniService::Strict
 
   param :predicate, OmniService::Path::CoercibleNonEmptySegments

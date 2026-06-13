@@ -49,7 +49,9 @@
 class OmniService::FindOne
   extend Dry::Initializer
   include Dry::Monads[:result]
-  include OmniService::Inspect.new(:context_key, :repository, :lookup, :omittable, :nullable, :path)
+  include OmniService::Inspect.new(
+    :context_key, :repository, :lookup, :omittable, :nullable, :path, hide_defaults: :path
+  )
 
   PRIMARY_KEY = :id
 

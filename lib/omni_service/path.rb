@@ -40,6 +40,7 @@
 #   # => [Reference(path: [:post, :published?], value: true, resolved: true)]
 class OmniService::Path
   extend Dry::Initializer
+  include Dry::Equalizer(:expand_arrays, :call_methods)
 
   Segment = OmniService::Types::Symbol | OmniService::Types::Integer
   Segments = OmniService::Types::Array.of(Segment)

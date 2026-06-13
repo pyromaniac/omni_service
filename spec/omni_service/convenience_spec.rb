@@ -72,4 +72,42 @@ RSpec.describe OmniService::Convenience do
       )
     end
   end
+
+  describe '#dispatch' do
+    subject(:dispatch_component) { operation_class.dispatch(:role, admin: admin_flow) }
+
+    let(:admin_flow) { ->(_, **) { Dry::Monads::Success(selected: :admin) } }
+
+    it 'builds a dispatch component' do
+      expect(dispatch_component).to be_a(OmniService::Dispatch) & have_attributes(
+        selector: [:role],
+        branches: { admin: admin_flow },
+        code: :unhandled_dispatch
+      )
+    end
+
+    context 'with custom code' do
+      subject(:dispatch_component) { operation_class.dispatch(:role, :unknown_role, admin: admin_flow) }
+
+      it 'passes the code to dispatch' do
+        expect(dispatch_component).to be_a(OmniService::Dispatch) & have_attributes(
+          selector: [:role],
+          branches: { admin: admin_flow },
+          code: :unknown_role
+        )
+      end
+    end
+
+    context 'with nil code' do
+      subject(:dispatch_component) { operation_class.dispatch(:role, nil, admin: admin_flow) }
+
+      it 'uses the default code' do
+        expect(dispatch_component).to be_a(OmniService::Dispatch) & have_attributes(
+          selector: [:role],
+          branches: { admin: admin_flow },
+          code: :unhandled_dispatch
+        )
+      end
+    end
+  end
 end

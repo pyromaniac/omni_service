@@ -137,6 +137,10 @@ module OmniService::Convenience
     OmniService::Remap.new(mapping)
   end
 
+  def dispatch(selector, code = nil, **branches)
+    OmniService::Dispatch.new(selector, branches, **{ code: }.compact)
+  end
+
   def component(name, from = Object, **options, &block)
     raise ArgumentError, "Please provide either a superclass or a block for #{name}" unless from || block
 
