@@ -154,6 +154,29 @@ RSpec.describe OmniService::Transaction do
           )
         end
       end
+
+      context 'with nested transaction component' do
+        let(:component) { OmniService::Chain.new(nested_transaction, observe_outer_transaction_state) }
+        let(:nested_transaction) { described_class.new(nested_component, on_success: nested_on_success) }
+        let(:nested_component) { ->(_, **) { test_simple_repository.create(name: 'nested_component') } }
+        let(:nested_on_success) { [->(_, **) { test_simple_repository.create(name: 'nested_on_success') }] }
+        let(:observe_outer_transaction_state) do
+          lambda do |_, **|
+            Dry::Monads::Success(names_before_outer_commit: TestSimple.order(:id).pluck(:name))
+          end
+        end
+
+        it 'runs nested on_success after outer commit' do
+          expect { result }.to change { TestSimple.order(:id).pluck(:name) }.from([])
+            .to(%w[nested_component nested_on_success on_success])
+          expect(result).to be_a(OmniService::Result) & have_attributes(
+            context: {
+              test_simple: have_attributes(name: 'nested_component'),
+              names_before_outer_commit: %w[nested_component]
+            }
+          )
+        end
+      end
     end
 
     context 'when the component returns Failure' do

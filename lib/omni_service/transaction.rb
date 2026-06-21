@@ -128,6 +128,7 @@ class OmniService::Transaction
   def resolve_callback_promises(result)
     result.merge(on_success: result.on_success.map do |callback_result|
       next callback_result unless callback_result.is_a?(Concurrent::Promises::Future)
+      next callback_result unless callback_result.resolved?
 
       OmniService.sync_callbacks? ? callback_result.value! : callback_result
     end)
