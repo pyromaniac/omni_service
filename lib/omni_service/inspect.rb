@@ -65,7 +65,7 @@ class OmniService::Inspect < Module
   end
 
   def value_for(object, name)
-    object.public_send(@value_methods[name] || name)
+    object.__send__(@value_methods[name] || name)
   end
 
   def default_for(object, name)

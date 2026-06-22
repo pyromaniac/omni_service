@@ -44,4 +44,28 @@ RSpec.describe OmniService::Inspect do
       INSPECT
     end
   end
+
+  context 'with private value method' do
+    let(:component_class) do
+      stub_const('TestInspectPrivateComponent', Class.new do
+        include OmniService::Inspect.new(:count)
+
+        def initialize(count)
+          @count = count
+        end
+
+        private
+
+        attr_reader :count
+      end)
+    end
+    let(:component) { component_class.new(1) }
+
+    it 'includes the attribute' do
+      expect(inspect_output).to eq('#<TestInspectPrivateComponent count=1>')
+      expect(pretty_inspect_output).to eq(<<~INSPECT)
+        #<TestInspectPrivateComponent count=1>
+      INSPECT
+    end
+  end
 end
