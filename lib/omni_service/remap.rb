@@ -16,15 +16,16 @@
 #
 class OmniService::Remap
   extend Dry::Initializer
-  include Dry::Equalizer(:mapping, :path)
-  include OmniService::Inspect.new(:mapping, :path, hide_defaults: :path)
+  include Dry::Equalizer(:mapping, :resolver)
+  include OmniService::Inspect.new(:mapping, :resolver, hide_defaults: :resolver)
   include OmniService::Strict
 
   param :mapping, OmniService::Types::Hash.map(
     OmniService::Types::Symbol | OmniService::Path::NonEmptySegments,
     OmniService::Types::Symbol | OmniService::Path::NonEmptySegments
   )
-  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new(call_methods: true, expand_arrays: true) }
+  option :resolver, OmniService::Types::Callable,
+    default: -> { OmniService::Path.new(call_methods: true, expand_arrays: true) }
 
   def call(*params, **context)
     OmniService::Result.build(self, params:, context: remapped_context(context))
@@ -38,7 +39,7 @@ class OmniService::Remap
 
   def remapped_context(context)
     normalized_mapping.each_with_object({}) do |(source, target), remapped|
-      references = path.call(context, source)
+      references = resolver.call(context, source)
       collection = collection?(target, references)
       values = mapped_values(references, collection:)
 

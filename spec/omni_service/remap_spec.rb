@@ -197,12 +197,14 @@ RSpec.describe OmniService::Remap do
       end
     end
 
-    context 'with custom path' do
+    context 'with custom resolver' do
       let(:mapping) { { source: :target } }
-      let(:options) { { path: custom_path } }
-      let(:custom_path) { ->(_root, source) { [OmniService::Path::Reference.new(path: source, value: 'custom', resolved: true)] } }
+      let(:options) { { resolver: custom_resolver } }
+      let(:custom_resolver) do
+        ->(_root, source) { [OmniService::Path::Reference.new(path: source, value: 'custom', resolved: true)] }
+      end
 
-      it 'uses the injected path dependency' do
+      it 'uses the injected resolver' do
         expect(result).to be_success & have_attributes(
           params: [params],
           context: { target: 'custom' }

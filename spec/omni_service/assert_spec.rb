@@ -39,7 +39,7 @@ RSpec.describe OmniService::Assert do
         expect(result).to be_failure & have_attributes(
           params: [params],
           context: { post: },
-          errors: [have_attributes(code: :not_published, path: %i[post published?])]
+          errors: [have_attributes(code: :not_published, path: [])]
         )
       end
     end
@@ -87,7 +87,7 @@ RSpec.describe OmniService::Assert do
         expect(result).to be_failure & have_attributes(
           params: [params],
           context: {},
-          errors: [have_attributes(code: :editor_required, path: [:editor])]
+          errors: [have_attributes(code: :editor_required, path: [])]
         )
       end
     end
@@ -105,11 +105,11 @@ RSpec.describe OmniService::Assert do
         end
       end
 
-      it 'fails every falsey reference' do
+      it 'fails once when any reference is falsey' do
         expect(result).to be_failure & have_attributes(
           params: [params],
           context: { comments: [valid_comment, invalid_comment] },
-          errors: [have_attributes(code: :not_published, path: [:comments, 1, :valid?])]
+          errors: [have_attributes(code: :not_published, path: [])]
         )
       end
     end
@@ -127,13 +127,28 @@ RSpec.describe OmniService::Assert do
       end
     end
 
-    context 'with custom path' do
+    context 'with error path' do
+      let(:published) { false }
+      let(:options) { { path: :post } }
+
+      it 'uses the configured error path' do
+        expect(result).to be_failure & have_attributes(
+          params: [params],
+          context: { post: },
+          errors: [have_attributes(code: :not_published, path: [:post])]
+        )
+      end
+    end
+
+    context 'with custom resolver' do
       let(:predicate) { :editor }
       let(:context) { { editor: false, predicate_result: true } }
-      let(:options) { { path: custom_path } }
-      let(:custom_path) { ->(root, path) { [OmniService::Path::Reference.new(path:, value: root[:predicate_result], resolved: true)] } }
+      let(:options) { { resolver: custom_resolver } }
+      let(:custom_resolver) do
+        ->(root, path) { [OmniService::Path::Reference.new(path:, value: root[:predicate_result], resolved: true)] }
+      end
 
-      it 'uses the injected path' do
+      it 'uses the injected resolver' do
         expect(result).to be_success & have_attributes(
           params: [params],
           context: { editor: false, predicate_result: true },

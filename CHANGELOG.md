@@ -8,9 +8,12 @@
 - **Error**: `to_hash` and `to_h` now return only public error payload fields, excluding `component` and empty values
 - **Namespace**: Replaced `shared_params: true` with `from: []`; new `from:` option specifies extraction path (defaults to namespace)
 - **Result**: `to_monad` now returns `Success(context)` / `Failure(errors)` instead of wrapping the whole `Result`
+- **Path traversal**: Callable injection option renamed from `path` to `resolver` across components; `Assert`, `Refute`, and `Dispatch` now reserve `path` for the error location
 
 ### Changed
 
+- **Assert/Refute**: Failures now produce one error at the base path by default and accept an explicit params `path`
+- **Dispatch**: Generated errors now use the base path by default and accept an explicit params `path`; convenience calls accept rare options through the second positional hash
 - **Chain**: Signature now uses the first component that consumes params (skips leading context-only components)
 - **Parallel**: Signature calculation returns sum of component signatures (distribution semantics)
 - **Parallel**: Refactored params accumulation into separate methods for clarity

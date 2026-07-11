@@ -62,7 +62,7 @@ RSpec.describe OmniService::Dispatch do
         expect(call).to be_failure & have_attributes(
           params: [params],
           context: { role: :guest },
-          errors: [have_attributes(code: :unhandled_dispatch, path: [:role])]
+          errors: [have_attributes(code: :unhandled_dispatch, path: [])]
         )
       end
     end
@@ -74,7 +74,7 @@ RSpec.describe OmniService::Dispatch do
         expect(call).to be_failure & have_attributes(
           params: [params],
           context: {},
-          errors: [have_attributes(code: :unhandled_dispatch, path: [:role])]
+          errors: [have_attributes(code: :unhandled_dispatch, path: [])]
         )
       end
     end
@@ -110,14 +110,25 @@ RSpec.describe OmniService::Dispatch do
 
       it 'uses the configured code' do
         expect(call).to be_failure & have_attributes(
-          errors: [have_attributes(code: :unknown_role, path: [:role])]
+          errors: [have_attributes(code: :unknown_role, path: [])]
+        )
+      end
+    end
+
+    context 'with custom error path' do
+      let(:options) { { path: :role } }
+      let(:context) { { role: :guest } }
+
+      it 'uses the configured path' do
+        expect(call).to be_failure & have_attributes(
+          errors: [have_attributes(code: :unhandled_dispatch, path: [:role])]
         )
       end
     end
 
     context 'with ambiguous selector references' do
       let(:selector) { %i[roles name] }
-      let(:options) { { path: OmniService::Path.new(expand_arrays: true) } }
+      let(:options) { { path: :role, resolver: OmniService::Path.new(expand_arrays: true) } }
       let(:context) { { roles: [{ name: :admin }, { name: :editor }] } }
 
       it 'raises operation failure' do
@@ -130,7 +141,7 @@ RSpec.describe OmniService::Dispatch do
               have_attributes(
                 message: 'Dispatch selector [:roles, :name] resolved to multiple paths: ' \
                   '[[:roles, 0, :name], [:roles, 1, :name]]',
-                path: %i[roles name]
+                path: [:role]
               )
             ]
           )

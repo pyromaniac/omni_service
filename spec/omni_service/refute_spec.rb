@@ -39,7 +39,7 @@ RSpec.describe OmniService::Refute do
         expect(result).to be_failure & have_attributes(
           params: [params],
           context: { post: },
-          errors: [have_attributes(code: :already_archived, path: %i[post archived?])]
+          errors: [have_attributes(code: :already_archived, path: [])]
         )
       end
     end
@@ -61,7 +61,7 @@ RSpec.describe OmniService::Refute do
         expect(result).to be_failure & have_attributes(
           params: [params],
           context: { post: { comments: [comment] } },
-          errors: [have_attributes(code: :first_comment_spam, path: [:post, :comments, 0, :spam?])]
+          errors: [have_attributes(code: :first_comment_spam, path: [])]
         )
       end
     end
@@ -106,25 +106,37 @@ RSpec.describe OmniService::Refute do
         end
       end
 
-      it 'fails every truthy reference' do
+      it 'fails once when any reference is truthy' do
         expect(result).to be_failure & have_attributes(
           params: [params],
           context: { comments: [clean_comment, first_spam_comment, second_spam_comment] },
-          errors: [
-            have_attributes(code: :already_archived, path: [:comments, 1, :spam?]),
-            have_attributes(code: :already_archived, path: [:comments, 2, :spam?])
-          ]
+          errors: [have_attributes(code: :already_archived, path: [])]
         )
       end
     end
 
-    context 'with custom path' do
+    context 'with error path' do
+      let(:archived) { true }
+      let(:options) { { path: %i[post archived] } }
+
+      it 'uses the configured error path' do
+        expect(result).to be_failure & have_attributes(
+          params: [params],
+          context: { post: },
+          errors: [have_attributes(code: :already_archived, path: %i[post archived])]
+        )
+      end
+    end
+
+    context 'with custom resolver' do
       let(:predicate) { :draft }
       let(:context) { { draft: true, predicate_result: false } }
-      let(:options) { { path: custom_path } }
-      let(:custom_path) { ->(root, path) { [OmniService::Path::Reference.new(path:, value: root[:predicate_result], resolved: true)] } }
+      let(:options) { { resolver: custom_resolver } }
+      let(:custom_resolver) do
+        ->(root, path) { [OmniService::Path::Reference.new(path:, value: root[:predicate_result], resolved: true)] }
+      end
 
-      it 'uses the injected path' do
+      it 'uses the injected resolver' do
         expect(result).to be_success & have_attributes(
           params: [params],
           context: { draft: true, predicate_result: false },

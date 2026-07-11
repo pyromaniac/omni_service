@@ -223,7 +223,8 @@ remap(primary_tag_ids: :tag_ids, secondary_tag_ids: :tag_ids)
 
 ### assert and refute
 Context-only predicate guards. They do not consume or transform params; they only validate accumulated
-context and fail with the configured code and resolved path when the predicate does not match.
+context. A failed guard produces one error with the configured code at the base path by default. Pass
+`path:` to associate the error with a params location.
 
 ```ruby
 chain(
@@ -233,8 +234,8 @@ chain(
   publish_post
 )
 
-assert([:comments, 0, :valid?], code: :first_comment_invalid)
-refute(:draft, code: :already_draft)
+assert([:comments, 0, :valid?], code: :first_comment_invalid, path: %i[comments body])
+refute(:draft, code: :already_draft, path: :status)
 ```
 
 ### params and schema
@@ -318,6 +319,11 @@ dispatch(:role,
 )
 
 dispatch(:role, :unknown_role,
+  admin: publish_as_admin,
+  editor: publish_as_editor
+)
+
+dispatch(:role, { code: :unknown_role, path: :role },
   admin: publish_as_admin,
   editor: publish_as_editor
 )

@@ -137,8 +137,10 @@ module OmniService::Convenience
     OmniService::Remap.new(mapping)
   end
 
-  def dispatch(selector, code = nil, **branches)
-    OmniService::Dispatch.new(selector, branches, **{ code: }.compact)
+  def dispatch(selector, code_or_options = nil, **branches)
+    options = code_or_options.is_a?(Hash) ? code_or_options : { code: code_or_options }.compact
+
+    OmniService::Dispatch.new(selector, branches, **options)
   end
 
   def component(name, from = Object, **options, &block)

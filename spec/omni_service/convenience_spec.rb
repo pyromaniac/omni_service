@@ -82,7 +82,8 @@ RSpec.describe OmniService::Convenience do
       expect(dispatch_component).to be_a(OmniService::Dispatch) & have_attributes(
         selector: [:role],
         branches: { admin: admin_flow },
-        code: :unhandled_dispatch
+        code: :unhandled_dispatch,
+        path: []
       )
     end
 
@@ -106,6 +107,21 @@ RSpec.describe OmniService::Convenience do
           selector: [:role],
           branches: { admin: admin_flow },
           code: :unhandled_dispatch
+        )
+      end
+    end
+
+    context 'with options' do
+      subject(:dispatch_component) do
+        operation_class.dispatch(:role, { code: :unknown_role, path: :role }, admin: admin_flow)
+      end
+
+      it 'passes options separately from branches' do
+        expect(dispatch_component).to be_a(OmniService::Dispatch) & have_attributes(
+          selector: [:role],
+          branches: { admin: admin_flow },
+          code: :unknown_role,
+          path: [:role]
         )
       end
     end

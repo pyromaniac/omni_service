@@ -10,8 +10,8 @@
 #
 class OmniService::Dispatch
   extend Dry::Initializer
-  include Dry::Equalizer(:selector, :branches, :code, :path)
-  include OmniService::Inspect.new(:selector, :branches, :code, :path, hide_defaults: :path)
+  include Dry::Equalizer(:selector, :branches, :code, :path, :resolver)
+  include OmniService::Inspect.new(:selector, :branches, :code, :path, :resolver, hide_defaults: :resolver)
   include OmniService::Strict
 
   DEFAULT_ERROR_CODE = :unhandled_dispatch
@@ -22,10 +22,11 @@ class OmniService::Dispatch
     OmniService::Types::Callable
   ).constrained(min_size: 1)
   option :code, OmniService::Types::Symbol, default: -> { DEFAULT_ERROR_CODE }
-  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new(call_methods: true) }
+  option :path, OmniService::Path::CoercibleSegments, default: -> { [] }
+  option :resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new(call_methods: true) }
 
   def call(*params, **context)
-    references = path.call(context, selector)
+    references = resolver.call(context, selector)
     raise_ambiguous_selector!(params, context, references) if references.size > 1
 
     component = component_for(references.first)
@@ -33,7 +34,7 @@ class OmniService::Dispatch
     if component
       component.call(*params, **context).merge(operation: self)
     else
-      failure_result(params, context, references.first&.path || selector)
+      failure_result(params, context)
     end
   end
 
@@ -69,13 +70,13 @@ class OmniService::Dispatch
       self,
       params:,
       context:,
-      errors: [OmniService::Error.build(self, message: ambiguous_selector_message(references), path: selector)]
+      errors: [OmniService::Error.build(self, message: ambiguous_selector_message(references), path:)]
     )
 
     raise OmniService::OperationFailed, result
   end
 
-  def failure_result(params, context, path)
+  def failure_result(params, context)
     OmniService::Result.build(
       self,
       params:,

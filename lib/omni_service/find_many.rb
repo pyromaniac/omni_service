@@ -39,7 +39,9 @@
 class OmniService::FindMany
   extend Dry::Initializer
   include Dry::Monads[:result]
-  include OmniService::Inspect.new(:context_key, :repository, :lookup, :omittable, :path, hide_defaults: :path)
+  include OmniService::Inspect.new(
+    :context_key, :repository, :lookup, :omittable, :resolver, hide_defaults: :resolver
+  )
 
   PRIMARY_KEY = :id
 
@@ -83,7 +85,7 @@ class OmniService::FindMany
       OmniService::Types::Array.of(OmniService::Types::Symbol)), optional: true
   option :omittable, OmniService::Types::Bool, default: proc { false }
   option :nullable, OmniService::Types::Bool, default: proc { false }
-  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new(expand_arrays: true) }
+  option :resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new(expand_arrays: true) }
 
   def call(params, **context)
     return Success({}) if already_found?(context)
@@ -128,7 +130,7 @@ class OmniService::FindMany
   end
 
   def pointer_references(params, pointer)
-    id_references = path.call(params, pointer)
+    id_references = resolver.call(params, pointer)
     id_references = [] if missing_nested_root?(params, pointer, id_references)
 
     id_references.map { |reference| build_lookup(params, reference) }
@@ -154,7 +156,7 @@ class OmniService::FindMany
     parent_path = id_reference.path[..-2]
     return missing_type_reference(parent_path) unless parent_path.grep(Symbol) == type[..-2]
 
-    path.call(params, [*parent_path, type.last], expand_arrays: false).first
+    resolver.call(params, [*parent_path, type.last], expand_arrays: false).first
   end
 
   def missing_type_reference(parent_path)

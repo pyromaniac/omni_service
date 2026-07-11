@@ -10,28 +10,33 @@
 # @example Assert the first comment
 #   assert([:comments, 0, :valid?], code: :first_comment_invalid)
 #
+# @example Associate failure with a params path
+#   assert(%i[post published?], code: :not_published, path: :publish)
+#
 class OmniService::Assert
   extend Dry::Initializer
-  include Dry::Equalizer(:predicate, :code, :path)
-  include OmniService::Inspect.new(:predicate, :code, :path, hide_defaults: :path)
+  include Dry::Equalizer(:predicate, :code, :path, :resolver)
+  include OmniService::Inspect.new(:predicate, :code, :path, :resolver, hide_defaults: :resolver)
   include OmniService::Strict
 
   param :predicate, OmniService::Path::CoercibleNonEmptySegments
   option :code, OmniService::Types::Symbol
-  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new(call_methods: true, expand_arrays: true) }
+  option :path, OmniService::Path::CoercibleSegments, default: -> { [] }
+  option :resolver, OmniService::Types::Callable,
+    default: -> { OmniService::Path.new(call_methods: true, expand_arrays: true) }
 
   def call(*params, **context)
-    failed_references = path.call(context, predicate).reject { |reference| reference.resolved? && reference.value }
+    failed = resolver.call(context, predicate).any? { |reference| !reference.resolved? || !reference.value }
 
-    if failed_references.empty?
-      OmniService::Result.build(self, params:, context:)
-    else
+    if failed
       OmniService::Result.build(
         self,
         params:,
         context:,
-        errors: failed_references.map { |reference| OmniService::Error.build(self, code:, path: reference.path) }
+        errors: [OmniService::Error.build(self, code:, path:)]
       )
+    else
+      OmniService::Result.build(self, params:, context:)
     end
   end
 

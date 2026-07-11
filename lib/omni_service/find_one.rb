@@ -50,7 +50,7 @@ class OmniService::FindOne
   extend Dry::Initializer
   include Dry::Monads[:result]
   include OmniService::Inspect.new(
-    :context_key, :repository, :lookup, :omittable, :nullable, :path, hide_defaults: :path
+    :context_key, :repository, :lookup, :omittable, :nullable, :resolver, hide_defaults: :resolver
   )
 
   PRIMARY_KEY = :id
@@ -67,7 +67,7 @@ class OmniService::FindOne
   option :omittable, OmniService::Types::Bool, default: proc { false }
   option :nullable, OmniService::Types::Bool, default: proc { false }
   option :skippable, OmniService::Types::Bool, default: proc { false }
-  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new }
+  option :resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new }
 
   def call(params, **context)
     return Success({}) if already_found?(context)
@@ -114,7 +114,7 @@ class OmniService::FindOne
 
   def resolve_repository(params)
     if repository.is_a?(Hash)
-      repository[path.call(params, type).first.value]
+      repository[resolver.call(params, type).first.value]
     else
       repository
     end
@@ -171,6 +171,6 @@ class OmniService::FindOne
   end
 
   def path_references(params, paths)
-    paths.map { |path_segments| path.call(params, path_segments).first }
+    paths.map { |path_segments| resolver.call(params, path_segments).first }
   end
 end

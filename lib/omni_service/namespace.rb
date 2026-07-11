@@ -34,20 +34,22 @@ require 'active_support/core_ext/hash/deep_merge'
 #
 class OmniService::Namespace
   extend Dry::Initializer
-  include Dry::Equalizer(:namespace, :component, :from, :optional, :path)
-  include OmniService::Inspect.new(:namespace, :component, :from, :optional, :path, hide_defaults: :path)
+  include Dry::Equalizer(:namespace, :component, :from, :optional, :resolver)
+  include OmniService::Inspect.new(
+    :namespace, :component, :from, :optional, :resolver, hide_defaults: :resolver
+  )
   include OmniService::Strict
 
   param :namespace, OmniService::Types::Coercible::Array.of(OmniService::Types::Symbol)
   param :component, OmniService::Types::Callable
   option :from, OmniService::Types::Coercible::Array.of(OmniService::Types::Symbol), default: -> { namespace }
   option :optional, OmniService::Types::Bool, default: -> { false }
-  option :path, OmniService::Types::Callable, default: -> { OmniService::Path.new }
+  option :resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new }
 
   def call(*params, **context)
     return process_result(params, context) if from.empty?
 
-    namespace_presence = params_to_check(params).map { |param| path.call(param, from).first.resolved? }
+    namespace_presence = params_to_check(params).map { |param| resolver.call(param, from).first.resolved? }
 
     return skipped_result(params, context) if optional && namespace_presence.none?
     return missing_key_result(params, context) if namespace_presence.none?
@@ -78,7 +80,7 @@ class OmniService::Namespace
 
   def prepare_contexts(context)
     base = context.except(namespace.first)
-    namespaced = path.call(context, namespace).first.value || {}
+    namespaced = resolver.call(context, namespace).first.value || {}
     inner = namespaced.is_a?(Hash) ? base.merge(namespaced) : base
     [base, namespaced, inner]
   end
@@ -95,7 +97,7 @@ class OmniService::Namespace
   def extract_from_param(param, index, params_count)
     return param unless index < params_count
 
-    reference = path.call(param, from).first
+    reference = resolver.call(param, from).first
     reference.resolved? ? reference.value || {} : {}
   end
 
