@@ -365,6 +365,30 @@ FindMany.new(:comments, repository: repo, by: { id: [:comments, :id] })
 # params: { comments: [{ id: 1 }, { id: [2, 3] }] }
 ```
 
+### Context scopes
+
+Both finders accept a `within:` hash mapping repository query attributes to context paths.
+Paths read hash keys, call object methods, and support explicit array indices.
+
+```ruby
+finder = FindOne.new(:post, repository: repo, within: { tenant: %i[current_user account], published: :visible })
+finder.call({ post_id: 123 }, current_user: user, visible: false)
+# => repo.get_one(id: 123, tenant: user.account, published: false)
+
+finder = FindMany.new(:posts, repository: repo, within: { tenant: %i[current_user account] })
+finder.call({ post_ids: [1, 2] }, current_user: user)
+# => repo.get_many(id: [1, 2], tenant: user.account)
+```
+
+Use association objects (`tenant:`) or IDs (`tenant_id: %i[current_user account id]`).
+Terminal arrays are passed as one query value, and resolved `nil` and `false` values are preserved.
+Missing context paths raise `KeyError`; scope columns cannot overlap `by:` lookup columns.
+`within:` reads context; `with:`, `by:`, and polymorphic `type:` read params.
+`resolver:` resolves params paths, and `context_resolver:` resolves `within:` paths.
+Both callables take `(root, path)`; configure traversal when constructing [Path](lib/omni_service/path.rb).
+The same scopes apply to every selected polymorphic repository. Existing context shortcuts and
+omittable or nullable lookups skip scope resolution when they skip the query.
+
 ## Error Format
 
 ```ruby

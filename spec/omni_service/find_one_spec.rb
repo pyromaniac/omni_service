@@ -1,15 +1,207 @@
 # frozen_string_literal: true
 
 RSpec.describe OmniService::FindOne do
-  let(:find_one) { described_class.new(context_key, repository: repository, **options) }
+  subject(:find_one) { described_class.new(context_key, repository: repository, **options) }
+
   let(:context_key) { :test_simple }
   let(:repository) { TestRepository.new(TestSimple) }
   let(:options) { {} }
+
+  describe '#initialize' do
+    context 'with overlapping scope columns' do
+      let(:options) { { within: { id: :allowed_id } } }
+
+      it 'rejects the overlapping scope' do
+        expect { find_one }.to raise_error(ArgumentError, 'Query conditions overlap lookup columns: [:id]')
+      end
+    end
+
+    context 'with overlapping custom columns' do
+      let(:options) { { by: :name, within: { name: :allowed_name } } }
+
+      it 'rejects the overlapping scope' do
+        expect { find_one }.to raise_error(ArgumentError, 'Query conditions overlap lookup columns: [:name]')
+      end
+    end
+  end
 
   describe '#call' do
     subject(:result) { find_one.call(params, **context) }
 
     let!(:test_simple) { TestSimple.create!(name: 'test_simple') }
+
+    context 'with context scopes' do
+      let(:options) { { within: { tenant: %i[current_user account], flag: :enabled } } }
+      let(:params) { { test_simple_id: test_simple.id, tenant: other_tenant, enabled: true } }
+      let(:context) { { current_user: current_user, enabled: false } }
+      let(:current_user) { Struct.new(:account).new(tenant) }
+      let(:tenant) { TestTenant.create!(name: 'tenant') }
+      let(:other_tenant) { TestTenant.create!(name: 'other') }
+      let!(:test_simple) { TestSimple.create!(name: 'test_simple', tenant: tenant) }
+
+      it 'queries with context association and flag' do
+        expect(result).to be_success(test_simple: test_simple)
+      end
+
+      context 'with a custom params resolver' do
+        let(:options) { super().merge(resolver: custom_resolver) }
+        let(:params) { { lookup: super() } }
+        let(:params_path) { OmniService::Path.new }
+        let(:custom_resolver) { ->(root, path) { params_path.call(root.fetch(:lookup), path) } }
+
+        it 'calls the resolver with two arguments' do
+          expect(result).to be_success(test_simple: test_simple)
+        end
+      end
+
+      context 'with a custom context resolver' do
+        let(:options) { super().merge(context_resolver: custom_resolver) }
+        let(:context) { { caller: super() } }
+        let(:context_path) { OmniService::Path.new(call_methods: true) }
+        let(:custom_resolver) { ->(root, path) { context_path.call(root.fetch(:caller), path) } }
+
+        it 'calls the resolver with two arguments' do
+          expect(result).to be_success(test_simple: test_simple)
+        end
+      end
+
+      context 'with changing context' do
+        let(:other_user) { Struct.new(:account).new(other_tenant) }
+
+        it 'resolves scopes for each call' do
+          expect(result).to be_success(test_simple: test_simple)
+          expect(find_one.call(params, **context, current_user: other_user)).to be_failure([
+            { code: :not_found, path: [:test_simple_id] }
+          ])
+        end
+      end
+
+      context 'with another tenant' do
+        let(:current_user) { Struct.new(:account).new(other_tenant) }
+
+        it 'reports the ID as not found' do
+          expect(result).to be_failure([{ code: :not_found, path: [:test_simple_id] }])
+        end
+      end
+
+      context 'with a different flag' do
+        let(:context) { { current_user: current_user, enabled: true } }
+
+        it 'applies every scope column' do
+          expect(result).to be_failure([{ code: :not_found, path: [:test_simple_id] }])
+        end
+      end
+
+      context 'with a tenant ID path' do
+        let(:options) { { within: { tenant_id: %i[current_user account id] } } }
+
+        it 'queries with the association ID' do
+          expect(result).to be_success(test_simple: test_simple)
+        end
+      end
+
+      context 'with an indexed context path' do
+        let(:options) { { within: { tenant: [:users, 0, :account] } } }
+        let(:context) { { users: [current_user] } }
+
+        it 'reads the indexed account' do
+          expect(result).to be_success(test_simple: test_simple)
+        end
+      end
+
+      context 'with a nil scope value' do
+        let(:context) { { current_user: current_user, expected_name: nil } }
+        let(:options) { { within: { tenant: %i[current_user account], name: :expected_name } } }
+        let!(:test_simple) { TestSimple.create!(tenant: tenant) }
+
+        it 'keeps nil in the query' do
+          expect(result).to be_success(test_simple: test_simple)
+        end
+
+        context 'with a named entity' do
+          let!(:test_simple) { TestSimple.create!(name: 'test_simple', tenant: tenant) }
+
+          it 'restricts the query to nil values' do
+            expect(result).to be_failure([{ code: :not_found, path: [:test_simple_id] }])
+          end
+        end
+      end
+
+      context 'without the context root' do
+        let(:context) { { enabled: false } }
+
+        it 'raises for the missing context path' do
+          expect { result }.to raise_error(KeyError, 'Missing context path for tenant: [:current_user, :account]')
+        end
+      end
+
+      context 'without the account method' do
+        let(:context) { { current_user: Object.new, enabled: false } }
+
+        it 'raises for the missing context path' do
+          expect { result }.to raise_error(KeyError, 'Missing context path for tenant: [:current_user, :account]')
+        end
+      end
+
+      context 'with a nil intermediate value' do
+        let(:context) { { current_user: nil, enabled: false } }
+
+        it 'raises for the missing context path' do
+          expect { result }.to raise_error(KeyError, 'Missing context path for tenant: [:current_user, :account]')
+        end
+      end
+
+      context 'with a loaded entity' do
+        let(:context) { { test_simple: test_simple } }
+
+        it 'keeps the existing context shortcut' do
+          expect(result).to be_success({})
+        end
+      end
+
+      context 'with omittable params' do
+        let(:options) { { within: { tenant: %i[current_user account] }, omittable: true } }
+        let(:params) { {} }
+        let(:context) { {} }
+
+        it 'skips lookup before resolving scopes' do
+          expect(result).to be_success({})
+        end
+      end
+
+      context 'with nullable params' do
+        let(:options) { { within: { tenant: %i[current_user account] }, nullable: true } }
+        let(:params) { { test_simple_id: nil } }
+        let(:context) { {} }
+
+        it 'clears the entity before resolving scopes' do
+          expect(result).to be_success(test_simple: nil)
+        end
+      end
+
+      context 'with polymorphic repositories' do
+        let(:repository) do
+          {
+            'First' => TestRepository.new(TestSimple.where(name: 'test_simple')),
+            'Second' => TestRepository.new(TestSimple.where(name: 'second'))
+          }
+        end
+        let(:params) { { test_simple_id: test_simple.id, test_simple_type: 'First' } }
+        let(:context) { { current_user: current_user, enabled: false, test_simple_type: 'Second' } }
+
+        it 'selects the repository from params' do
+          expect(result).to be_success(test_simple: test_simple)
+        end
+
+        context 'with another tenant' do
+          let(:current_user) { Struct.new(:account).new(other_tenant) }
+
+          it 'scopes the selected repository' do
+            expect(result).to be_failure([{ code: :not_found, path: [:test_simple_id] }])
+          end
+        end
+      end
+    end
 
     context 'with default options' do
       where(:params, :context, :match_result) do

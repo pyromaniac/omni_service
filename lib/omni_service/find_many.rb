@@ -9,6 +9,7 @@
 # - :by - column mapping with nested paths: { id: [:comments, :id] }
 # - :repository - single repo or Hash for polymorphic lookup
 # - :type - path to type discriminator for polymorphic lookup
+# - :within - query columns mapped to context paths
 #
 # Flags:
 # - :nullable - skip nil values in array instead of reporting errors
@@ -32,6 +33,11 @@
 #                by: { id: [:files, :id] }, type: [:files, :type])
 #   # params: { files: [{ type: 'Image', id: 1 }, { type: 'Video', id: 2 }] }
 #
+# @example Context scope
+#   FindMany.new(:posts, repository: post_repo, within: { tenant: %i[current_user account], flag: :enabled })
+#   # params: { post_ids: [1, 2] }, context: { current_user: user, enabled: false }
+#   # => post_repo.get_many(id: [1, 2], tenant: user.account, flag: false)
+#
 # @example Nullable for optional associations
 #   FindMany.new(:tags, repository: repo, nullable: true)
 #   # params: { tag_ids: [1, nil, 2] } => Success(tags: [<Tag>, <Tag>])
@@ -40,7 +46,8 @@ class OmniService::FindMany
   extend Dry::Initializer
   include Dry::Monads[:result]
   include OmniService::Inspect.new(
-    :context_key, :repository, :lookup, :omittable, :resolver, hide_defaults: :resolver
+    :context_key, :repository, :lookup, :within, :omittable, :resolver, :context_resolver,
+    hide_defaults: %i[within resolver context_resolver]
   )
 
   PRIMARY_KEY = :id
@@ -83,9 +90,22 @@ class OmniService::FindMany
     OmniService::Types::Array.of(OmniService::Types::Symbol) |
     OmniService::Types::Hash.map(OmniService::Types::Symbol, OmniService::Types::Symbol |
       OmniService::Types::Array.of(OmniService::Types::Symbol)), optional: true
+  option :within, OmniService::Types::Hash.map(
+    OmniService::Types::Symbol, OmniService::Path::CoercibleNonEmptySegments
+  ), default: -> { {} }
   option :omittable, OmniService::Types::Bool, default: proc { false }
   option :nullable, OmniService::Types::Bool, default: proc { false }
   option :resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new(expand_arrays: true) }
+  option :context_resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new(call_methods: true) }
+
+  def initialize(...)
+    super
+
+    overlapping_columns = columns & within.keys
+    return if overlapping_columns.empty?
+
+    raise ArgumentError, "Query conditions overlap lookup columns: #{overlapping_columns.inspect}"
+  end
 
   def call(params, **context)
     return Success({}) if already_found?(context)
@@ -98,7 +118,7 @@ class OmniService::FindMany
     elsif !no_errors
       missing_keys_result(*missing_paths)
     else
-      find(references)
+      find(references, conditions: query_conditions(context))
     end
   end
 
@@ -156,7 +176,7 @@ class OmniService::FindMany
     parent_path = id_reference.path[..-2]
     return missing_type_reference(parent_path) unless parent_path.grep(Symbol) == type[..-2]
 
-    resolver.call(params, [*parent_path, type.last], expand_arrays: false).first
+    resolver.call(params, [*parent_path, type.last]).first
   end
 
   def missing_type_reference(parent_path)
@@ -174,31 +194,40 @@ class OmniService::FindMany
     references.filter_map { |reference| reference.invalid_type_path(repository) }
   end
 
-  def find(references)
+  def query_conditions(context)
+    within.to_h do |column, path|
+      reference = context_resolver.call(context, path).first
+      raise KeyError, "Missing context path for #{column}: #{reference.path.inspect}" if reference.missing?
+
+      [column, reference.value]
+    end
+  end
+
+  def find(references, conditions:)
     # TODO: use all columns/pointer somehow
     pointer = pointers.first
     column = columns.first
 
     if polymorphic?
       type_references = references[pointer].group_by(&:type_value)
-      result, not_found_paths = fetch_polymorphic(type_references, column)
+      result, not_found_paths = fetch_polymorphic(type_references, column, conditions:)
     else
-      result, not_found_paths = fetch(references[pointer], column, repository)
+      result, not_found_paths = fetch(references[pointer], column, repository, conditions:)
     end
 
     find_result(result, not_found_paths)
   end
 
-  def fetch(references, column, repository)
+  def fetch(references, column, repository, conditions:)
     ids = references.flat_map(&:normalized_value).uniq
-    result = repository.get_many(column => ids).to_a
+    result = repository.get_many(column => ids, **conditions).to_a
     not_found_paths = not_found_paths(result.index_by(&column), references)
     [result, not_found_paths]
   end
 
-  def fetch_polymorphic(type_references, column)
+  def fetch_polymorphic(type_references, column, conditions:)
     type_references
-      .map { |(type, references)| fetch(references.map(&:id), column, repository[type]) }
+      .map { |(type, references)| fetch(references.map(&:id), column, repository[type], conditions:) }
       .transpose.map { |a| a.flatten(1) }
   end
 
