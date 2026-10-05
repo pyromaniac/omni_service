@@ -11,6 +11,13 @@ RSpec.describe OmniService::Path do
     let(:root) { { user: { id: 1 } } }
     let(:path) { %i[user id] }
 
+    context 'with call-time configuration' do
+      it 'rejects both traversal options' do
+        expect { path_component.call(root, path, call_methods: true) }.to raise_error(ArgumentError)
+        expect { path_component.call(root, path, expand_arrays: true) }.to raise_error(ArgumentError)
+      end
+    end
+
     context 'with resolved hash path' do
       it 'returns a resolved reference' do
         expect(references).to contain_exactly(

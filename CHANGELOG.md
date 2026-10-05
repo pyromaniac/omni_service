@@ -2,6 +2,7 @@
 
 ### Breaking
 
+- **[Path](lib/omni_service/path.rb)**: Traversal options are configured in the initializer; `call` accepts only root and path
 - **Context**: `Context.new` now requires `raise_on_error`, and validators must respond to `#call` and `#try`; `context()` no longer raises on invalid context, use `context!` to raise
 - **Chain**: Sequence component renamed to `Chain` (use `chain(...)` or `OmniService::Chain`)
 - **Component**: No longer mixes in `Dry::Monads[:result]`; include it explicitly if you rely on `Success`/`Failure` helpers
@@ -27,6 +28,7 @@
 
 ### Added
 
+- **FindOne/FindMany**: The `within:` hash resolves context paths for tenancy and other query scopes; polymorphic type selection continues to read params
 - **Context**: `context!` convenience for raising on invalid context
 - **Either**: New composition component that tries components in order and returns the first success; useful for fallback/recovery patterns with transaction isolation support
 - **Fanout**: New composition component that fans out shared params to all components and collects all errors
@@ -40,6 +42,7 @@
 
 ### Fixed
 
+- **FindOne/FindMany**: Params and context resolvers receive only root and path; `context_resolver:` configures context traversal separately
 - **Namespace**: Correctly handles components with splat signatures that consume all params
 - **Namespace**: Missing consumed params now produce `{}` placeholders instead of wrapping the original param, and `optional: true` skips return empty hash replacements for each incoming param
 - **Parallel**: Proper leftover params handling in distribution mode

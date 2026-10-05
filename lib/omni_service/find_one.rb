@@ -8,6 +8,7 @@
 # - :by - column mapping, supports nested paths: { id: [:deep, :post_id] }
 # - :repository - single repo or Hash for polymorphic lookup
 # - :type - path to type discriminator for polymorphic lookup
+# - :within - query columns mapped to context paths
 #
 # Flags:
 # - :nullable - allow nil param value, returns Success(key: nil)
@@ -34,6 +35,11 @@
 #   FindOne.new(:comment, repository: { 'Post' => post_repo, 'Article' => article_repo })
 #   # params: { comment_id: 1, comment_type: 'Post' } => post_repo.get_one(id: 1)
 #
+# @example Context scope
+#   FindOne.new(:post, repository: post_repo, within: { tenant: %i[current_user account], flag: :enabled })
+#   # params: { post_id: 123 }, context: { current_user: user, enabled: false }
+#   # => post_repo.get_one(id: 123, tenant: user.account, flag: false)
+#
 # @example Nullable association (for clearing)
 #   FindOne.new(:category, repository: repo, nullable: true)
 #   # params: { category_id: nil } => Success(category: nil)
@@ -50,7 +56,8 @@ class OmniService::FindOne
   extend Dry::Initializer
   include Dry::Monads[:result]
   include OmniService::Inspect.new(
-    :context_key, :repository, :lookup, :omittable, :nullable, :resolver, hide_defaults: :resolver
+    :context_key, :repository, :lookup, :within, :omittable, :nullable, :resolver, :context_resolver,
+    hide_defaults: %i[within resolver context_resolver]
   )
 
   PRIMARY_KEY = :id
@@ -64,10 +71,23 @@ class OmniService::FindOne
     OmniService::Types::Array.of(OmniService::Types::Symbol) |
     OmniService::Types::Hash.map(OmniService::Types::Symbol, OmniService::Types::Symbol |
       OmniService::Types::Array.of(OmniService::Types::Symbol)), optional: true
+  option :within, OmniService::Types::Hash.map(
+    OmniService::Types::Symbol, OmniService::Path::CoercibleNonEmptySegments
+  ), default: -> { {} }
   option :omittable, OmniService::Types::Bool, default: proc { false }
   option :nullable, OmniService::Types::Bool, default: proc { false }
   option :skippable, OmniService::Types::Bool, default: proc { false }
   option :resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new }
+  option :context_resolver, OmniService::Types::Callable, default: -> { OmniService::Path.new(call_methods: true) }
+
+  def initialize(...)
+    super
+
+    overlapping_columns = columns & within.keys
+    return if overlapping_columns.empty?
+
+    raise ArgumentError, "Query conditions overlap lookup columns: #{overlapping_columns.inspect}"
+  end
 
   def call(params, **context)
     return Success({}) if already_found?(context)
@@ -81,7 +101,7 @@ class OmniService::FindOne
     repository = resolve_repository(params)
     return repository_failure(params, values) unless repository
 
-    find(values, repository:)
+    find(values, repository:, conditions: query_conditions(context))
   end
 
   private
@@ -132,8 +152,17 @@ class OmniService::FindOne
     end
   end
 
-  def find(values, repository:)
-    result = repository.get_one(**columns.zip(values).to_h)
+  def query_conditions(context)
+    within.to_h do |column, path|
+      reference = context_resolver.call(context, path).first
+      raise KeyError, "Missing context path for #{column}: #{reference.path.inspect}" if reference.missing?
+
+      [column, reference.value]
+    end
+  end
+
+  def find(values, repository:, conditions:)
+    result = repository.get_one(**columns.zip(values).to_h, **conditions)
 
     if result.nil?
       skippable ? Success({}) : not_found_failure

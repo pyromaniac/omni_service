@@ -71,51 +71,47 @@ class OmniService::Path
   option :expand_arrays, OmniService::Types::Bool, default: -> { false }
   option :call_methods, OmniService::Types::Bool, default: -> { false }
 
-  def call(root, path, expand_arrays: self.expand_arrays, call_methods: self.call_methods)
-    references(root, Array(path), expand_arrays:, call_methods:, current_path: [])
+  def call(root, path)
+    references(root, Array(path), current_path: [])
   end
 
   private
 
-  def references(current, remaining_path, expand_arrays:, call_methods:, current_path:)
+  def references(current, remaining_path, current_path:)
     return [reference(current_path, current)] if remaining_path.empty?
 
     segment, *tail = remaining_path
 
     case current
     when Hash
-      hash_references(current, segment, tail, expand_arrays:, call_methods:, current_path:)
+      hash_references(current, segment, tail, current_path:)
     when Array
-      array_references(current, remaining_path, expand_arrays:, call_methods:, current_path:)
+      array_references(current, remaining_path, current_path:)
     else
-      object_references(current, remaining_path, expand_arrays:, call_methods:, current_path:)
+      object_references(current, remaining_path, current_path:)
     end
   end
 
-  def hash_references(current, segment, tail, expand_arrays:, call_methods:, current_path:)
+  def hash_references(current, segment, tail, current_path:)
     full_path = [*current_path, segment, *tail]
     return [missing_reference(full_path)] unless current.key?(segment)
 
-    references(current[segment], tail, expand_arrays:, call_methods:, current_path: [*current_path, segment])
+    references(current[segment], tail, current_path: [*current_path, segment])
   end
 
-  def array_references(current, remaining_path, expand_arrays:, call_methods:, current_path:)
+  def array_references(current, remaining_path, current_path:)
     segment, *tail = remaining_path
 
-    if segment.is_a?(Integer)
-      return array_index_references(current, segment, tail, expand_arrays:, call_methods:, current_path:)
-    end
+    return array_index_references(current, segment, tail, current_path:) if segment.is_a?(Integer)
 
     if expand_arrays
       current.flat_map.with_index do |value, index|
-        references(value, remaining_path, expand_arrays:, call_methods:, current_path: [*current_path, index])
+        references(value, remaining_path, current_path: [*current_path, index])
       end
     elsif call_methods && method_segment?(segment) && current.respond_to?(segment)
       references(
         current.public_send(segment),
         tail,
-        expand_arrays:,
-        call_methods:,
         current_path: [*current_path, segment]
       )
     else
@@ -123,14 +119,14 @@ class OmniService::Path
     end
   end
 
-  def array_index_references(current, segment, tail, expand_arrays:, call_methods:, current_path:)
+  def array_index_references(current, segment, tail, current_path:)
     full_path = [*current_path, segment, *tail]
     return [missing_reference(full_path)] unless segment >= 0 && segment < current.size
 
-    references(current[segment], tail, expand_arrays:, call_methods:, current_path: [*current_path, segment])
+    references(current[segment], tail, current_path: [*current_path, segment])
   end
 
-  def object_references(current, remaining_path, expand_arrays:, call_methods:, current_path:)
+  def object_references(current, remaining_path, current_path:)
     segment, *tail = remaining_path
 
     return [] if expand_arrays && !call_methods
@@ -139,8 +135,6 @@ class OmniService::Path
       references(
         current.public_send(segment),
         tail,
-        expand_arrays:,
-        call_methods:,
         current_path: [*current_path, segment]
       )
     else
