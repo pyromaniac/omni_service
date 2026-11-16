@@ -356,9 +356,14 @@ FindOne.new(:item, repository: { 'Post' => post_repo, 'Article' => article_repo 
 
 ### FindMany
 
+`FindMany` returns matches in the order each lookup value first appears in params.
+For polymorphic lookups, the type and value together identify each lookup.
+For each lookup, the finder keeps the repository's row order and any duplicate rows.
+It reports `:not_found` errors in params order.
+
 ```ruby
 FindMany.new(:posts, repository: repo)
-# params: { post_ids: [1, 2, 3] } => Success(posts: [...])
+# params: { post_ids: [3, 1, 3] } => Success(posts: [<Post 3>, <Post 1>])
 
 # Nested IDs
 FindMany.new(:comments, repository: repo, by: { id: [:comments, :id] })

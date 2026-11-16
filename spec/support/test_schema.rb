@@ -1,8 +1,15 @@
 # frozen_string_literal: true
 
 require 'active_record'
+require 'fileutils'
+require 'tmpdir'
 
-ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: ':memory:')
+test_database_dir = Dir.mktmpdir('omni-service-test')
+ActiveRecord::Base.establish_connection(adapter: 'sqlite3', database: File.join(test_database_dir, 'test.sqlite3'))
+at_exit do
+  ActiveRecord::Base.connection_pool.disconnect!
+  FileUtils.remove_entry(test_database_dir)
+end
 ActiveRecord::Base.logger = Logger.new(nil)
 
 ActiveRecord::Schema.define do
