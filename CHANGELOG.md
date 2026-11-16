@@ -13,6 +13,7 @@
 
 ### Changed
 
+- **FindMany**: Matches and `:not_found` errors now follow params order across polymorphic types. Previously, results followed repository order, and polymorphic results and errors were grouped by type
 - **Assert/Refute**: Failures now produce one error at the base path by default and accept an explicit params `path`
 - **Dispatch**: Generated errors now use the base path by default and accept an explicit params `path`; convenience calls accept rare options through the second positional hash
 - **Chain**: Signature now uses the first component that consumes params (skips leading context-only components)

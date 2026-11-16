@@ -229,8 +229,8 @@ RSpec.describe OmniService::FindMany do
           { test_simple_ids: lazy { [test_simple2.id, test_simple1.id, test_simple1.id] } } => [
             be_success({}),
             be_success({}),
-            lazy { be_success({ test_simples: contain_exactly(test_simple2, test_simple1) }) },
-            lazy { be_success({ test_simples: contain_exactly(test_simple2, test_simple1) }) }
+            lazy { be_success({ test_simples: [test_simple2, test_simple1] }) },
+            lazy { be_success({ test_simples: [test_simple2, test_simple1] }) }
           ],
           { test_simple_ids: lazy { test_simple1.id } } => [
             be_success({}),
@@ -293,7 +293,7 @@ RSpec.describe OmniService::FindMany do
               { id: lazy { [test_simple1.id, test_simple2.id, test_simple3.id] } },
               { id: [] }
             ] },
-            lazy { be_success({ test_simples: contain_exactly(test_simple2, test_simple1, test_simple3) }) }
+            lazy { be_success({ test_simples: [test_simple2, test_simple1, test_simple3] }) }
           ],
           [
             { deep: { id: lazy { [test_simple1.id, test_simple3.id] } } },
@@ -389,7 +389,7 @@ RSpec.describe OmniService::FindMany do
               { id: lazy { [test_simple1.id, test_simple3.id] } },
               { id: [] }
             ] },
-            lazy { be_success({ test_simples: contain_exactly(test_simple2, test_simple1, test_simple3) }) }
+            lazy { be_success({ test_simples: [test_simple2, test_simple1, test_simple3] }) }
           ],
           [
             { deep: { id: lazy { [test_simple1.id, test_simple3.id] } } },
@@ -481,7 +481,7 @@ RSpec.describe OmniService::FindMany do
               { id: lazy { [test_simple1.id, test_simple3.id] } },
               { id: [] }
             ] },
-            lazy { be_success({ test_simples: contain_exactly(test_simple2, test_simple1, test_simple3) }) }
+            lazy { be_success({ test_simples: [test_simple2, test_simple1, test_simple3] }) }
           ],
           [
             { deep: { id: lazy { [test_simple1.id, test_simple3.id] } } },
@@ -531,6 +531,40 @@ RSpec.describe OmniService::FindMany do
       end
     end
 
+    context 'with a lookup column that is not unique' do
+      let(:options) { { by: :name } }
+      let(:params) { { name: %w[test_simple2 test_simple1 test_simple2 test_simple1] } }
+      let!(:test_simple4) { TestSimple.create!(name: 'test_simple1') }
+
+      it 'returns every match of a value one time' do
+        expect(result).to be_success(test_simples: [test_simple2, test_simple1, test_simple4])
+      end
+    end
+
+    context 'with a nil that matches an entity' do
+      let(:options) { { by: { name: %i[deep name] } } }
+      let(:params) { { deep: [{ name: nil }, { name: 'test_simple1' }, { name: [nil] }] } }
+      let!(:test_simple4) { TestSimple.create!(name: nil) }
+
+      it 'puts the entity at the first nil' do
+        expect(result).to be_success(test_simples: [test_simple4, test_simple1])
+      end
+    end
+
+    context 'with a repository result that has only to_a' do
+      let(:repository) do
+        result_class = Data.define(:to_a)
+        Class.new do
+          define_method(:get_many) { |**attributes| result_class.new(to_a: TestSimple.where(**attributes).to_a) }
+        end.new
+      end
+      let(:params) { { test_simple_ids: [test_simple2.id, test_simple1.id] } }
+
+      it 'reads the entities through to_a' do
+        expect(result).to be_success(test_simples: [test_simple2, test_simple1])
+      end
+    end
+
     context 'with polymorphic setup' do
       let(:options) do
         {
@@ -557,6 +591,14 @@ RSpec.describe OmniService::FindMany do
           ],
           [
             { deep: [
+              { type: 'simples_true', id: lazy { test_simple5.id } },
+              { type: 'simples_false', id: lazy { test_simple1.id } },
+              { type: 'simples_true', id: lazy { test_simple4.id } }
+            ] },
+            lazy { be_success({ test_simples: [test_simple5, test_simple1, test_simple4] }) }
+          ],
+          [
+            { deep: [
               { type: 'simples_true' },
               { id: lazy { test_simple2.id } },
               { type: nil, id: lazy { test_simple2.id } },
@@ -580,8 +622,8 @@ RSpec.describe OmniService::FindMany do
           [
             { deep: [
               { type: 'simples_false', id: lazy { test_simple1.id } },
-              { type: 'simples_false', id: lazy { test_simple5.id } },
               { type: 'simples_true', id: lazy { test_simple2.id } },
+              { type: 'simples_false', id: lazy { test_simple5.id } },
               { type: 'simples_true', id: 0 },
               { type: 'simples_true', id: nil }
             ] },
@@ -601,6 +643,25 @@ RSpec.describe OmniService::FindMany do
 
       with_them do
         it { is_expected.to match_result }
+      end
+
+      context 'with one entity under two types' do
+        let(:options) do
+          super().merge(
+            repository: { 'first' => TestRepository.new(TestSimple), 'second' => TestRepository.new(TestSimple) }
+          )
+        end
+        let(:params) do
+          { deep: [
+            { type: 'first', id: test_simple1.id },
+            { type: 'second', id: test_simple1.id },
+            { type: 'first', id: test_simple1.id }
+          ] }
+        end
+
+        it 'keeps the entity of each type' do
+          expect(result).to be_success(test_simples: [test_simple1, test_simple1])
+        end
       end
     end
   end

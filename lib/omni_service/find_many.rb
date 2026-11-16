@@ -2,7 +2,10 @@
 
 # Finds multiple entities by IDs via repository#get_many.
 # Accepts array of IDs or nested structures with IDs.
-# Returns deduplicated entities; reports not-found errors with array indices.
+# Returns matches in the order each lookup value first appears in params.
+# The lookup key includes the type for polymorphic lookups.
+# Keeps repository order and duplicate rows within each lookup key.
+# Reports not-found errors with array indices, in the order of params.
 #
 # Options:
 # - :with - param key for IDs array (default: :"#{context_key.singularize}_ids")
@@ -205,52 +208,58 @@ class OmniService::FindMany
 
   def find(references, conditions:)
     # TODO: use all columns/pointer somehow
-    pointer = pointers.first
-    column = columns.first
+    references = references[pointers.first]
+    indexes = entity_indexes(references, columns.first, conditions:)
+    not_found_paths = references.flat_map { |reference| not_found_paths(indexes[type_of(reference)], reference) }
 
-    if polymorphic?
-      type_references = references[pointer].group_by(&:type_value)
-      result, not_found_paths = fetch_polymorphic(type_references, column, conditions:)
+    if not_found_paths.empty?
+      Success(context_key => ordered_entities(references, indexes))
     else
-      result, not_found_paths = fetch(references[pointer], column, repository, conditions:)
+      not_found_failure(not_found_paths)
     end
-
-    find_result(result, not_found_paths)
   end
 
-  def fetch(references, column, repository, conditions:)
-    ids = references.flat_map(&:normalized_value).uniq
-    result = repository.get_many(column => ids, **conditions).to_a
-    not_found_paths = not_found_paths(result.index_by(&column), references)
-    [result, not_found_paths]
+  # One query per repository:
+  #   { nil => { 1 => [<Post 1>], 2 => [<Post 2>] } }
+  #   { 'Image' => { 1 => [<Image 1>] }, 'Video' => { 2 => [<Video 2>] } } for a polymorphic lookup
+  def entity_indexes(references, column, conditions:)
+    references.group_by { |reference| type_of(reference) }.to_h do |type, type_references|
+      ids = type_references.flat_map(&:normalized_value).uniq
+      entities = (type ? repository[type] : repository).get_many(column => ids, **conditions).to_a
+
+      [type, entities.group_by(&column)]
+    end
   end
 
-  def fetch_polymorphic(type_references, column, conditions:)
-    type_references
-      .map { |(type, references)| fetch(references.map(&:id), column, repository[type], conditions:) }
-      .transpose.map { |a| a.flatten(1) }
+  # A repository returns entities in its own order, so the references decide the order here.
+  # Two types can hold entities that are equal, so a type and a value identify an entity, and the
+  # entities themselves are not compared.
+  def ordered_entities(references, indexes)
+    references
+      .flat_map { |reference| checked_values(reference).map { |value| [type_of(reference), value] } }
+      .uniq
+      .flat_map { |type, value| indexes[type].fetch(value, []) }
   end
 
-  def not_found_paths(entities_index, references)
-    references.flat_map do |reference|
-      if reference.value.is_a?(Array)
-        reference.value.filter_map.with_index { |v, i| [*reference.path, i] if missing_value?(entities_index, v) }
-      else
-        missing_value?(entities_index, reference.value) ? [reference.path] : []
-      end
+  # The values that the found check reads. Unlike normalized_value, a nil outside of an array stays.
+  def checked_values(reference)
+    reference.value.is_a?(Array) ? reference.value : [reference.value]
+  end
+
+  def type_of(reference)
+    reference.type_value if polymorphic?
+  end
+
+  def not_found_paths(entities_index, reference)
+    if reference.value.is_a?(Array)
+      reference.value.filter_map.with_index { |v, i| [*reference.path, i] if missing_value?(entities_index, v) }
+    else
+      missing_value?(entities_index, reference.value) ? [reference.path] : []
     end
   end
 
   def missing_value?(entities_index, value)
     !(entities_index.key?(value) || (nullable && value.nil?))
-  end
-
-  def find_result(entities, not_found_paths)
-    if not_found_paths.empty?
-      Success(context_key => entities.compact)
-    else
-      not_found_failure(not_found_paths)
-    end
   end
 
   def not_found_failure(paths)
